@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{sync::transfer::Transfer, PollSend, Sink, Stream};
 
-pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
+pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Transfer::new());
     let sender = Sender {
         shared: shared.clone(),
@@ -32,14 +32,17 @@ impl<T> Sink for Sender<T> {
     }
 }
 
+impl<T> Drop for Sender<T> {
+    fn drop(&mut self) {
+        self.shared.sender_disconnect();
+    }
+}
+
 pub struct Receiver<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
 
-impl<T> Stream for Receiver<T>
-where
-    T: Clone,
-{
+impl<T> Stream for Receiver<T> {
     type Item = T;
 
     fn poll_recv(
@@ -47,5 +50,129 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
         self.shared.recv(cx.waker())
+    }
+}
+
+impl<T> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        self.shared.receiver_disconnect();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{pin::Pin, task::Context};
+
+    use crate::{PollRecv, PollSend, Sink, Stream};
+    use futures_test::task::{new_count_waker, noop_context, panic_context};
+
+    use super::channel;
+
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Message(usize);
+
+    #[test]
+    fn send_accepted() {
+        let mut cx = noop_context();
+        let (mut tx, _rx) = channel();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+        assert_eq!(
+            PollSend::Rejected(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
+    }
+
+    #[test]
+    fn send_recv() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+        assert_eq!(PollRecv::Closed, Pin::new(&mut rx).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn sender_disconnect() {
+        let mut cx = noop_context();
+        let (tx, mut rx) = channel::<Message>();
+
+        drop(tx);
+
+        assert_eq!(PollRecv::Closed, Pin::new(&mut rx).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn send_then_disconnect() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+
+        drop(tx);
+
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        assert_eq!(PollRecv::Closed, Pin::new(&mut rx).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn receiver_disconnect() {
+        let mut cx = noop_context();
+        let (mut tx, rx) = channel();
+
+        drop(rx);
+
+        assert_eq!(
+            PollSend::Rejected(Message(1)),
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+    }
+
+    #[test]
+    fn wake_receiver() {
+        let mut cx = panic_context();
+        let (mut tx, mut rx) = channel();
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+
+        assert_eq!(1, w1_count.get());
+
+        assert_eq!(
+            PollSend::Rejected(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
+
+        assert_eq!(1, w1_count.get());
     }
 }

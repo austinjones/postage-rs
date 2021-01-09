@@ -57,7 +57,7 @@ impl<E> SenderShared<E> {
     }
 
     pub fn subscribe_recv(&self, waker: Waker) {
-        self.inner.receiver_notify.subscribe(waker);
+        self.inner.sender_notify.subscribe(waker);
     }
 
     pub fn is_alive(&self) -> bool {
@@ -98,7 +98,7 @@ impl<E> ReceiverShared<E> {
     }
 
     pub fn subscribe_send(&self, waker: Waker) {
-        self.inner.sender_notify.subscribe(waker);
+        self.inner.receiver_notify.subscribe(waker);
     }
 
     pub fn is_alive(&self) -> bool {

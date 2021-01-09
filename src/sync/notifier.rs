@@ -1,16 +1,8 @@
-use std::{
-    collections::LinkedList,
-    sync::{
-        Mutex,
-    },
-    task::Waker,
-};
+use std::{collections::LinkedList, sync::Mutex, task::Waker};
 
 pub struct Notifier {
     wakers: Mutex<LinkedList<Waker>>,
 }
-
-pub struct NotifierRecv {}
 
 impl Notifier {
     pub fn new() -> Self {

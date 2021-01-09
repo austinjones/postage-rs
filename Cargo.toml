@@ -10,3 +10,6 @@ edition = "2018"
 pin-project = "1"
 crossbeam-queue = "0.3"
 atomic = "0.5"
+
+[dev-dependencies]
+futures-test = "0.3"

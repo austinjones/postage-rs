@@ -5,6 +5,9 @@ mod sync;
 mod try_recv;
 mod try_send;
 
+#[cfg(test)]
+mod test;
+
 use recv::RecvFuture;
 use send::SendFuture;
 
@@ -32,6 +35,7 @@ pub trait Sink: Sized {
     fn chain(self) {}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollSend<T> {
     /// The item was accepted and sent
     Ready,
@@ -65,6 +69,7 @@ pub trait Stream: Sized {
     fn find(self) {}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollRecv<T> {
     /// An item is ready
     Ready(T),

@@ -38,7 +38,7 @@ where
         {
             Ok(s) => {
                 *self.data.get() = Some(data);
-                self.state.store(complete, Ordering::Acquire);
+                self.state.store(complete, Ordering::Release);
                 Ok(s)
             }
             Err(s) => Err((s, data)),
