@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell};
+use std::cell::UnsafeCell;
 
 use atomic::{Atomic, Ordering};
 
@@ -36,11 +36,11 @@ where
             .state
             .compare_exchange(current, locked, success, failure)
         {
-            Ok(s) => unsafe {
+            Ok(s) => {
                 *self.data.get() = Some(data);
                 self.state.store(complete, Ordering::Acquire);
                 Ok(s)
-            },
+            }
             Err(s) => Err((s, data)),
         }
     }
@@ -50,7 +50,7 @@ where
     }
 
     pub unsafe fn store(&self, state: S, data: T, ordering: Ordering) {
-        unsafe { *self.data.get() = Some(data) }
+        *self.data.get() = Some(data);
 
         self.state.store(state, ordering);
     }
@@ -63,7 +63,7 @@ where
         failure: Ordering,
     ) -> Result<T, S> {
         match self.state.compare_exchange(current, new, success, failure) {
-            Ok(_s) => unsafe { Ok(self.take_internal()) },
+            Ok(_s) => Ok(self.take_internal()),
             Err(s) => Err(s),
         }
     }

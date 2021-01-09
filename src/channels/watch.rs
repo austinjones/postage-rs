@@ -72,6 +72,15 @@ where
     }
 }
 
+impl<T> Clone for Receiver<T> {
+    fn clone(&self) -> Self {
+        Self {
+            shared: self.shared.clone(),
+            generation: AtomicUsize::new(0),
+        }
+    }
+}
+
 struct StateExtension<T> {
     generation: AtomicUsize,
     value: RwLock<T>,

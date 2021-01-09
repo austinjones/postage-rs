@@ -8,13 +8,6 @@ use super::{
     oneshot_cell::{OneshotCell, TryRecvError},
 };
 
-#[derive(Copy, Clone)]
-enum WakerState {
-    None,
-    Waiting,
-    Taken,
-}
-
 pub struct Transfer<T> {
     state: OneshotCell<T>,
     waker: OneshotCell<Waker>,

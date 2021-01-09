@@ -1,5 +1,3 @@
-
-
 use crossbeam_queue::ArrayQueue;
 
 use crate::{
@@ -16,6 +14,7 @@ pub fn channel<T: Clone + Default>(capacity: usize) -> (Sender<T>, Receiver<T>) 
     (sender, receiver)
 }
 
+#[derive(Clone)]
 pub struct Sender<T> {
     pub(in crate::channels::mpsc) shared: SenderShared<StateExtension<T>>,
 }
