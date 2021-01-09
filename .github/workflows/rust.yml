@@ -1,0 +1,85 @@
+on: 
+  push:
+    branches:    
+      - main
+
+  pull_request:
+
+name: Continuous Integration
+
+jobs:
+  dependencies:
+    name: cargo build | dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - id: cargo-cache
+        name: cache
+        uses: austinjones/rust-cache@v1
+        with:
+          key: ci
+
+      - name: cargo build | dependencies
+        uses: actions-rs/cargo@v1
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          command: build
+          args: --all-features
+
+      - name: cargo build | dev dependencies
+        uses: actions-rs/cargo@v1
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          command: test
+          args: --all-features --no-run
+
+  check:
+    name: cargo check
+    needs: dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - id: cargo-cache
+        name: cache
+        uses: austinjones/rust-cache@v1
+        with:
+          key: ci
+
+      - name: cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+
+      - name: cargo clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  test:
+    name: cargo test
+    needs: dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+
+      - id: cargo-cache
+        name: cache
+        uses: austinjones/rust-cache@v1
+        with:
+          key: ci
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all-features
