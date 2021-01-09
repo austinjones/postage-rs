@@ -1,6 +1,7 @@
 [package]
 name = "postage"
 version = "0.1.0"
+description = "An async channel library"
 keywords = ["async", "channels"]
 categories = ["asynchronous"]
 authors = ["Austin Jones <implAustin@gmail.com>"]
