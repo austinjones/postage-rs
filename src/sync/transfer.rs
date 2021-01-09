@@ -1,12 +1,11 @@
-use std::{cell::UnsafeCell, mem::MaybeUninit, task::Waker};
+use std::{task::Waker};
 
-use atomic::{Atomic, Ordering};
+
 
 use crate::PollRecv;
 
 use super::{
     oneshot_cell::{OneshotCell, TryRecvError},
-    state_cell::StateCell,
 };
 
 #[derive(Copy, Clone)]

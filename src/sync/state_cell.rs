@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, mem::MaybeUninit};
+use std::{cell::UnsafeCell};
 
 use atomic::{Atomic, Ordering};
 
@@ -45,7 +45,7 @@ where
         }
     }
 
-    pub unsafe fn load(&self, ordering: Ordering) -> S {
+    pub unsafe fn load(&self, _ordering: Ordering) -> S {
         self.state.load(Ordering::Acquire)
     }
 
@@ -63,7 +63,7 @@ where
         failure: Ordering,
     ) -> Result<T, S> {
         match self.state.compare_exchange(current, new, success, failure) {
-            Ok(s) => unsafe { Ok(self.take_internal()) },
+            Ok(_s) => unsafe { Ok(self.take_internal()) },
             Err(s) => Err(s),
         }
     }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{sync::transfer::Transfer, PollRecv, PollSend, Sink, Stream};
+use crate::{sync::transfer::Transfer, PollSend, Sink, Stream};
 
 pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
     let shared = Arc::new(Transfer::new());

@@ -1,7 +1,6 @@
 use std::{
     collections::LinkedList,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Mutex,
     },
     task::Waker,
