@@ -317,7 +317,7 @@ mod tests {
     fn send_accepted() {
         let mut cx = panic_context();
         let mut chan = channel(1);
-        let (tx, rx) = pin(&mut chan);
+        let (tx, _rx) = pin(&mut chan);
 
         assert_eq!(PollSend::Ready, tx.poll_send(&mut cx, Message(1)));
     }
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn full_send_blocks() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(1);
+        let (mut tx, _rx) = channel(1);
 
         assert_eq!(
             PollSend::Ready,
@@ -342,7 +342,7 @@ mod tests {
     fn empty_blocks() {
         let mut cx = noop_context();
         let mut chan = channel(1);
-        let (tx, rx) = pin(&mut chan);
+        let (_tx, rx) = pin(&mut chan);
 
         assert_eq!(PollRecv::Pending, rx.poll_recv(&mut cx));
     }

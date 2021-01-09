@@ -45,16 +45,6 @@ where
         }
     }
 
-    pub unsafe fn load(&self, _ordering: Ordering) -> S {
-        self.state.load(Ordering::Acquire)
-    }
-
-    pub unsafe fn store(&self, state: S, data: T, ordering: Ordering) {
-        *self.data.get() = Some(data);
-
-        self.state.store(state, ordering);
-    }
-
     pub unsafe fn compare_take(
         &self,
         current: S,
@@ -66,11 +56,6 @@ where
             Ok(_s) => Ok(self.take_internal()),
             Err(s) => Err(s),
         }
-    }
-
-    pub unsafe fn take(&self, state: S, ordering: Ordering) -> T {
-        self.state.store(state, ordering);
-        self.take_internal()
     }
 
     unsafe fn take_internal(&self) -> T {

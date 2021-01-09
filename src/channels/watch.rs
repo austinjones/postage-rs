@@ -117,16 +117,7 @@ mod tests {
     use crate::{PollRecv, PollSend, Sink, Stream};
     use futures_test::task::{new_count_waker, noop_context, panic_context};
 
-    use super::{channel, Receiver, Sender};
-
-    fn pin<'a, 'b>(
-        chan: &mut (Sender<State>, Receiver<State>),
-    ) -> (Pin<&mut Sender<State>>, Pin<&mut Receiver<State>>) {
-        let tx = Pin::new(&mut chan.0);
-        let rx = Pin::new(&mut chan.1);
-
-        (tx, rx)
-    }
+    use super::channel;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct State(usize);

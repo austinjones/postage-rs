@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn send_blocks() {
         let mut cx = panic_context();
-        let (mut tx, rx) = channel(2);
+        let (mut tx, _rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
