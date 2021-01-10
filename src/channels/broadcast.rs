@@ -10,7 +10,6 @@ use crate::{
 use std::fmt::Debug;
 
 // bounded mpmc with backpressure
-
 pub fn channel<T: Clone + Sync>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     // we add one spare capacity so that receivers have an empty slot to wait on
     let (tx_shared, rx_shared) = shared(StateExtension::new(capacity + 1));
