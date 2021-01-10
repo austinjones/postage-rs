@@ -1,4 +1,5 @@
 use crossbeam_queue::ArrayQueue;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{
     sync::{shared, ReceiverShared, SenderShared},
@@ -17,6 +18,8 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 pub struct Sender<T> {
     pub(in crate::channels::mpsc) shared: SenderShared<StateExtension<T>>,
 }
+
+assert_impl_all!(Sender<String>: Clone, Send);
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
@@ -56,6 +59,9 @@ impl<T> Sink for Sender<T> {
 pub struct Receiver<T> {
     pub(in crate::channels::mpsc) shared: ReceiverShared<StateExtension<T>>,
 }
+
+assert_impl_all!(Receiver<String>: Send);
+assert_not_impl_all!(Receiver<String>: Clone);
 
 impl<T> Stream for Receiver<T> {
     type Item = T;

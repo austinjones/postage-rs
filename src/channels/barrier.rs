@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use atomic::{Atomic, Ordering};
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{sync::notifier::Notifier, PollRecv, PollSend, Sink, Stream};
 
@@ -22,6 +23,9 @@ pub fn channel() -> (Sender, Receiver) {
 pub struct Sender {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
+
+assert_impl_all!(Sender: Send);
+assert_not_impl_all!(Sender: Clone);
 
 impl Sink for Sender {
     type Item = ();
@@ -47,9 +51,12 @@ impl Drop for Sender {
     }
 }
 
+#[derive(Clone)]
 pub struct Receiver {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
+
+assert_impl_all!(Receiver: Send, Clone);
 
 #[derive(Copy, Clone)]
 enum State {
@@ -149,6 +156,31 @@ mod tests {
         drop(rx);
 
         assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+    }
+
+    #[test]
+    fn receiver_clone() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+        let mut rx2 = rx.clone();
+
+        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+
+        assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx2).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn receiver_send_then_clone() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+
+        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+
+        let mut rx2 = rx.clone();
+
+        assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx2).poll_recv(&mut cx));
     }
 
     #[test]

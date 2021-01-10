@@ -3,6 +3,8 @@ use std::sync::{
     RwLock,
 };
 
+use static_assertions::{assert_impl_all, assert_not_impl_all};
+
 use crate::{
     sync::{shared, ReceiverShared, SenderShared},
     PollRecv, PollSend, Sink, Stream,
@@ -23,6 +25,9 @@ pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
 pub struct Sender<T> {
     pub(in crate::channels::watch) shared: SenderShared<StateExtension<T>>,
 }
+
+assert_impl_all!(Sender<String>: Send);
+assert_not_impl_all!(Sender<String>: Clone);
 
 impl<T> Sink for Sender<T> {
     type Item = T;
@@ -47,6 +52,8 @@ pub struct Receiver<T> {
     pub(in crate::channels::watch) shared: ReceiverShared<StateExtension<T>>,
     pub(in crate::channels::watch) generation: AtomicUsize,
 }
+
+assert_impl_all!(Receiver<String>: Clone, Send);
 
 impl<T> Stream for Receiver<T>
 where

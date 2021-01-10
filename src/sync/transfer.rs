@@ -12,7 +12,7 @@ enum State {
     Dead,
 }
 
-pub struct Transfer<T> {
+pub struct Transfer<T: Sized> {
     sender: Atomic<State>,
     receiver: Atomic<State>,
     value: OneshotCell<T>,

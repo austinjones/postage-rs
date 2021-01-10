@@ -1,6 +1,7 @@
 use std::{cell::UnsafeCell, sync::atomic::AtomicUsize};
 
 use atomic::{Atomic, Ordering};
+use static_assertions::assert_impl_all;
 
 use crate::{
     sync::{shared, ReceiverShared, SenderShared},
@@ -10,7 +11,7 @@ use crate::{
 use std::fmt::Debug;
 
 // bounded mpmc with backpressure
-pub fn channel<T: Clone>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     // we add one spare capacity so that receivers have an empty slot to wait on
     let (tx_shared, rx_shared) = shared(StateExtension::new(capacity + 1));
     let sender = Sender { shared: tx_shared };
@@ -23,14 +24,16 @@ pub fn channel<T: Clone>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 #[derive(Clone)]
 pub struct Sender<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     pub(in crate::channels::broadcast) shared: SenderShared<StateExtension<T>>,
 }
 
+assert_impl_all!(Sender<String>: Send, Clone);
+
 impl<T> Sink for Sender<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     type Item = T;
 
@@ -96,15 +99,17 @@ where
 
 pub struct Receiver<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     shared: ReceiverShared<StateExtension<T>>,
     location: usize,
 }
 
+assert_impl_all!(Receiver<String>: Send, Clone);
+
 impl<T> Receiver<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     fn new(shared: ReceiverShared<StateExtension<T>>) -> Self {
         let state = shared.extension();
@@ -119,7 +124,7 @@ where
 
 impl<T> Stream for Receiver<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     type Item = T;
 
@@ -174,7 +179,7 @@ where
 
 impl<T> Clone for Receiver<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     fn clone(&self) -> Self {
         let state = self.shared.extension();
@@ -200,7 +205,7 @@ where
 
 struct StateExtension<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     buffer: Box<[Slot<T>]>,
     tail: AtomicUsize,
@@ -210,7 +215,7 @@ where
 
 impl<T> StateExtension<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     pub fn new(capacity: usize) -> Self {
         let mut vec = Vec::with_capacity(capacity);
@@ -244,7 +249,7 @@ enum SlotState {
 #[derive(Debug)]
 struct Slot<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     value: UnsafeCell<Option<T>>,
     state: Atomic<SlotState>,
@@ -253,7 +258,7 @@ where
 
 impl<T> Slot<T>
 where
-    T: Clone,
+    T: Clone + Send,
 {
     pub fn new() -> Self {
         Self {
@@ -290,6 +295,8 @@ where
         Ok(())
     }
 }
+
+unsafe impl<T> Sync for Slot<T> where T: Clone + Send {}
 
 #[cfg(test)]
 mod tests {

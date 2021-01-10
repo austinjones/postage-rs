@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use static_assertions::{assert_impl_all, assert_not_impl_all};
+
 use crate::{sync::transfer::Transfer, PollSend, Sink, Stream};
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
@@ -16,6 +18,9 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
 pub struct Sender<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
+
+assert_impl_all!(Sender<String>: Send);
+assert_not_impl_all!(Sender<String>: Clone);
 
 impl<T> Sink for Sender<T> {
     type Item = T;
@@ -41,6 +46,9 @@ impl<T> Drop for Sender<T> {
 pub struct Receiver<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
+
+assert_impl_all!(Sender<String>: Send);
+assert_not_impl_all!(Sender<String>: Clone);
 
 impl<T> Stream for Receiver<T> {
     type Item = T;

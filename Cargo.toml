@@ -18,6 +18,7 @@ pin-project = "1"
 crossbeam-queue = "0.3"
 atomic = "0.5"
 futures-task = "0.3"
+static_assertions = "1.1.0"
 
 [dev-dependencies]
 futures-test = "0.3"

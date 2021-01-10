@@ -63,3 +63,10 @@ where
         reference.take().unwrap()
     }
 }
+
+unsafe impl<S, T> Sync for StateCell<S, T>
+where
+    S: Copy,
+    T: Send,
+{
+}
