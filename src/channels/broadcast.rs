@@ -21,17 +21,11 @@ pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
-pub struct Sender<T>
-where
-    T: Clone + Send,
-{
+pub struct Sender<T> {
     pub(in crate::channels::broadcast) shared: SenderShared<StateExtension<T>>,
 }
 
-impl<T> Clone for Sender<T>
-where
-    T: Clone + Send,
-{
+impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
         Self {
             shared: self.shared.clone(),
@@ -43,7 +37,7 @@ assert_impl_all!(Sender<String>: Send, Clone);
 
 impl<T> Sink for Sender<T>
 where
-    T: Clone + Send,
+    T: Clone,
 {
     type Item = T;
 
@@ -107,20 +101,14 @@ where
     }
 }
 
-pub struct Receiver<T>
-where
-    T: Clone + Send,
-{
+pub struct Receiver<T> {
     shared: ReceiverShared<StateExtension<T>>,
     location: usize,
 }
 
 assert_impl_all!(Receiver<String>: Send, Clone);
 
-impl<T> Receiver<T>
-where
-    T: Clone + Send,
-{
+impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<StateExtension<T>>) -> Self {
         let state = shared.extension();
         state.readers.fetch_add(1, Ordering::AcqRel);
@@ -134,7 +122,7 @@ where
 
 impl<T> Stream for Receiver<T>
 where
-    T: Clone + Send,
+    T: Clone,
 {
     type Item = T;
 
@@ -187,10 +175,7 @@ where
     }
 }
 
-impl<T> Clone for Receiver<T>
-where
-    T: Clone + Send,
-{
+impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
         let state = self.shared.extension();
 
@@ -213,10 +198,7 @@ where
     }
 }
 
-struct StateExtension<T>
-where
-    T: Clone + Send,
-{
+struct StateExtension<T> {
     buffer: Box<[Slot<T>]>,
     tail: AtomicUsize,
     head: AtomicUsize,
@@ -257,10 +239,7 @@ enum SlotState {
 }
 
 #[derive(Debug)]
-struct Slot<T>
-where
-    T: Clone + Send,
-{
+struct Slot<T> {
     value: UnsafeCell<Option<T>>,
     state: Atomic<SlotState>,
     readers: AtomicUsize,
@@ -268,7 +247,7 @@ where
 
 impl<T> Slot<T>
 where
-    T: Clone + Send,
+    T: Clone,
 {
     pub fn new() -> Self {
         Self {
