@@ -1,28 +1,28 @@
-use std::{cell::UnsafeCell, sync::atomic::AtomicUsize};
-
-use atomic::{Atomic, Ordering};
 use static_assertions::assert_impl_all;
 
 use crate::{
-    sync::{shared, ReceiverShared, SenderShared},
+    sync::{
+        mpmc_circular_buffer::{BufferReader, MpmcCircularBuffer, TryRead, TryWrite},
+        shared, ReceiverShared, SenderShared,
+    },
     PollRecv, PollSend, Sink, Stream,
 };
-
-use std::fmt::Debug;
 
 // bounded mpmc with backpressure
 pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     // we add one spare capacity so that receivers have an empty slot to wait on
-    let (tx_shared, rx_shared) = shared(StateExtension::new(capacity + 1));
+    let (buffer, reader) = MpmcCircularBuffer::new(capacity);
+
+    let (tx_shared, rx_shared) = shared(buffer);
     let sender = Sender { shared: tx_shared };
 
-    let receiver = Receiver::new(rx_shared);
+    let receiver = Receiver::new(rx_shared, reader);
 
     (sender, receiver)
 }
 
 pub struct Sender<T> {
-    pub(in crate::channels::broadcast) shared: SenderShared<StateExtension<T>>,
+    pub(in crate::channels::broadcast) shared: SenderShared<MpmcCircularBuffer<T>>,
 }
 
 impl<T> Clone for Sender<T> {
@@ -44,7 +44,7 @@ where
     fn poll_send(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-        mut value: Self::Item,
+        value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         if self.shared.is_closed() {
             return PollSend::Rejected(value);
@@ -55,68 +55,30 @@ where
         //   register for wakeup
         // else
         //   overwrite the element
-        let state = self.shared.extension();
-
-        loop {
-            let head = state.head.load(Ordering::Acquire);
-            let head_slot = &state.buffer[head % state.buffer.len()];
-            let next_slot = &state.buffer[(head + 1) % state.buffer.len()];
-
-            // keep the next slot free, so readers have a location to pause if the buffer fills
-            match next_slot.state.load(Ordering::Acquire) {
-                SlotState::None => {}
-                SlotState::Writing | SlotState::Reading => {
-                    self.shared.subscribe_recv(cx.waker().clone());
-                    return PollSend::Pending(value);
-                }
+        let buffer = self.shared.extension();
+        match buffer.try_write(value) {
+            TryWrite::Pending(value) => {
+                self.shared.subscribe_recv(cx.waker().clone());
+                PollSend::Pending(value)
             }
-
-            // println!("Write slot: {:?}", head_slot);
-
-            match head_slot.write(value, &state.readers) {
-                Ok(_) => {
-                    return {
-                        state
-                            .head
-                            .compare_and_swap(head, head + 1, Ordering::AcqRel);
-
-                        self.shared.notify_receivers();
-                        // println!("Return slot: {:?}", head_slot);
-                        PollSend::Ready
-                    };
-                }
-                Err((slot_state, returned_value)) => match slot_state {
-                    SlotState::None => unreachable!(),
-                    SlotState::Writing => {
-                        value = returned_value;
-                        continue;
-                    }
-                    SlotState::Reading => {
-                        self.shared.subscribe_recv(cx.waker().clone());
-                        return PollSend::Pending(returned_value);
-                    }
-                },
+            TryWrite::Ready => {
+                self.shared.notify_receivers();
+                PollSend::Ready
             }
         }
     }
 }
 
 pub struct Receiver<T> {
-    shared: ReceiverShared<StateExtension<T>>,
-    location: usize,
+    shared: ReceiverShared<MpmcCircularBuffer<T>>,
+    reader: BufferReader,
 }
 
 assert_impl_all!(Receiver<String>: Send, Clone);
 
 impl<T> Receiver<T> {
-    fn new(shared: ReceiverShared<StateExtension<T>>) -> Self {
-        let state = shared.extension();
-        state.readers.fetch_add(1, Ordering::AcqRel);
-
-        Self {
-            shared,
-            location: 0,
-        }
+    fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {
+        Self { shared, reader }
     }
 }
 
@@ -127,49 +89,25 @@ where
     type Item = T;
 
     fn poll_recv(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
-        let state = self.shared.extension();
-        let slot = &state.buffer[self.location];
-        let next_location = (self.location + 1) % state.buffer.len();
+        let buffer = self.shared.extension();
+        let reader = &self.reader;
 
-        // println!("Recv buffer: {:?}", &state.buffer);
-        // println!("Recv slot: {:?}", &slot);
-        loop {
-            match slot.state.load(Ordering::Acquire) {
-                SlotState::None => {
-                    if self.shared.is_closed() {
-                        return PollRecv::Closed;
-                    }
-
-                    self.shared.subscribe_send(cx.waker().clone());
-                    return PollRecv::Pending;
+        match reader.try_read(buffer) {
+            TryRead::Pending => {
+                if self.shared.is_closed() {
+                    return PollRecv::Closed;
                 }
-                // TODO: try to avoid spinlock
-                SlotState::Writing => {
-                    continue;
-                }
-                SlotState::Reading => {
-                    debug_assert!(slot.readers.load(Ordering::Acquire) > 0);
 
-                    let value = unsafe { slot.clone_value() };
-
-                    if let Ok(_) =
-                        slot.readers
-                            .compare_exchange(1, 0, Ordering::AcqRel, Ordering::Relaxed)
-                    {
-                        slot.state.store(SlotState::None, Ordering::Release);
-                        state.tail.fetch_add(1, Ordering::AcqRel);
-                        self.shared.notify_senders();
-                    } else {
-                        slot.readers.fetch_sub(1, Ordering::AcqRel);
-                    }
-
-                    self.location = next_location;
-
-                    return PollRecv::Ready(value);
-                }
+                self.shared.subscribe_send(cx.waker().clone());
+                PollRecv::Pending
+            }
+            TryRead::Reading(value) => PollRecv::Ready(value),
+            TryRead::Complete(value) => {
+                self.shared.notify_senders();
+                PollRecv::Ready(value)
             }
         }
     }
@@ -177,115 +115,22 @@ where
 
 impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
-        let state = self.shared.extension();
-
-        state.readers.fetch_add(1, Ordering::AcqRel);
-
-        let tail = state.tail.load(Ordering::Acquire);
-        let tail_elem = &state.buffer[tail];
-
-        match tail_elem.state.load(Ordering::Acquire) {
-            SlotState::None | SlotState::Writing => {}
-            SlotState::Reading => {
-                tail_elem.readers.fetch_add(1, Ordering::AcqRel);
-            }
-        }
+        let buffer = self.shared.extension();
+        let reader = self.reader.clone(buffer);
 
         Self {
             shared: self.shared.clone(),
-            location: tail,
+            reader,
         }
     }
 }
 
-struct StateExtension<T> {
-    buffer: Box<[Slot<T>]>,
-    tail: AtomicUsize,
-    head: AtomicUsize,
-    readers: AtomicUsize,
-}
-
-impl<T> StateExtension<T>
-where
-    T: Clone + Send,
-{
-    pub fn new(capacity: usize) -> Self {
-        let mut vec = Vec::with_capacity(capacity);
-
-        for _ in 0..capacity {
-            vec.push(Slot::new());
-        }
-
-        Self {
-            buffer: vec.into_boxed_slice(),
-            tail: AtomicUsize::new(0),
-            head: AtomicUsize::new(0),
-            readers: AtomicUsize::new(0),
-        }
+impl<T> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        let buffer = self.shared.extension();
+        self.reader.drop(buffer);
     }
 }
-
-// a ring buffer
-// each element has a refcount
-// writers block if the next element refcount is non-zero
-// readers block if the next element generation is discontinuous
-//
-
-#[derive(Copy, Clone, Debug)]
-enum SlotState {
-    None,
-    Writing,
-    Reading,
-}
-
-#[derive(Debug)]
-struct Slot<T> {
-    value: UnsafeCell<Option<T>>,
-    state: Atomic<SlotState>,
-    readers: AtomicUsize,
-}
-
-impl<T> Slot<T>
-where
-    T: Clone,
-{
-    pub fn new() -> Self {
-        Self {
-            value: UnsafeCell::new(None),
-            state: Atomic::new(SlotState::None),
-            readers: AtomicUsize::new(0),
-        }
-    }
-
-    pub unsafe fn clone_value(&self) -> T {
-        let reference = self.value.get();
-        let r = reference.as_ref().unwrap();
-        r.as_ref().unwrap().clone()
-    }
-
-    pub fn write(&self, value: T, readers: &AtomicUsize) -> Result<(), (SlotState, T)> {
-        if let Err(e) = self.state.compare_exchange(
-            SlotState::None,
-            SlotState::Writing,
-            Ordering::AcqRel,
-            Ordering::Relaxed,
-        ) {
-            return Err((e, value));
-        }
-
-        unsafe {
-            *self.value.get() = Some(value);
-        }
-
-        let readers = readers.load(Ordering::Acquire);
-        self.readers.store(readers, Ordering::Release);
-
-        self.state.store(SlotState::Reading, Ordering::Release);
-        Ok(())
-    }
-}
-
-unsafe impl<T> Sync for Slot<T> where T: Clone + Send {}
 
 #[cfg(test)]
 mod tests {
@@ -296,6 +141,7 @@ mod tests {
 
     use super::{channel, Receiver, Sender};
 
+    //TODO: add test covering rx location when cloned on an in-progress channel (exercising tail)
     fn pin<'a, 'b>(
         chan: &mut (Sender<Message>, Receiver<Message>),
     ) -> (Pin<&mut Sender<Message>>, Pin<&mut Receiver<Message>>) {
@@ -537,5 +383,62 @@ mod tests {
         );
 
         assert_eq!(1, w1_count.get());
+    }
+
+    #[test]
+    fn dropping_receiver_does_not_block() {
+        let mut cx = panic_context();
+        let (mut tx, mut rx) = channel(1);
+        let rx2 = rx.clone();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+
+        drop(rx2);
+        assert_eq!(
+            PollSend::Pending(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(2))
+        );
+
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(3))
+        );
+    }
+
+    #[test]
+    fn drop_receiver_frees_slot() {
+        let mut cx = panic_context();
+        let (mut tx, mut rx) = channel(2);
+        let rx2 = rx.clone();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
+
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        drop(rx2);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(3))
+        );
     }
 }

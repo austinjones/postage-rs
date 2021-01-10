@@ -3,6 +3,7 @@ use std::{sync::Arc, task::Waker};
 use notifier::Notifier;
 use ref_count::RefCount;
 
+pub mod mpmc_circular_buffer;
 pub mod notifier;
 mod oneshot_cell;
 mod ref_count;
