@@ -21,12 +21,22 @@ pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
-#[derive(Clone)]
 pub struct Sender<T>
 where
     T: Clone + Send,
 {
     pub(in crate::channels::broadcast) shared: SenderShared<StateExtension<T>>,
+}
+
+impl<T> Clone for Sender<T>
+where
+    T: Clone + Send,
+{
+    fn clone(&self) -> Self {
+        Self {
+            shared: self.shared.clone(),
+        }
+    }
 }
 
 assert_impl_all!(Sender<String>: Send, Clone);
