@@ -10,7 +10,7 @@ use crate::{
 use std::fmt::Debug;
 
 // bounded mpmc with backpressure
-pub fn channel<T: Clone + Sync>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+pub fn channel<T: Clone>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     // we add one spare capacity so that receivers have an empty slot to wait on
     let (tx_shared, rx_shared) = shared(StateExtension::new(capacity + 1));
     let sender = Sender { shared: tx_shared };
@@ -23,14 +23,14 @@ pub fn channel<T: Clone + Sync>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 #[derive(Clone)]
 pub struct Sender<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     pub(in crate::channels::broadcast) shared: SenderShared<StateExtension<T>>,
 }
 
 impl<T> Sink for Sender<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     type Item = T;
 
@@ -96,7 +96,7 @@ where
 
 pub struct Receiver<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     shared: ReceiverShared<StateExtension<T>>,
     location: usize,
@@ -104,7 +104,7 @@ where
 
 impl<T> Receiver<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     fn new(shared: ReceiverShared<StateExtension<T>>) -> Self {
         let state = shared.extension();
@@ -119,7 +119,7 @@ where
 
 impl<T> Stream for Receiver<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     type Item = T;
 
@@ -174,7 +174,7 @@ where
 
 impl<T> Clone for Receiver<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     fn clone(&self) -> Self {
         let state = self.shared.extension();
@@ -200,7 +200,7 @@ where
 
 struct StateExtension<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     buffer: Box<[Slot<T>]>,
     tail: AtomicUsize,
@@ -210,7 +210,7 @@ where
 
 impl<T> StateExtension<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     pub fn new(capacity: usize) -> Self {
         let mut vec = Vec::with_capacity(capacity);
@@ -244,7 +244,7 @@ enum SlotState {
 #[derive(Debug)]
 struct Slot<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     value: UnsafeCell<Option<T>>,
     state: Atomic<SlotState>,
@@ -253,7 +253,7 @@ where
 
 impl<T> Slot<T>
 where
-    T: Clone + Sync,
+    T: Clone,
 {
     pub fn new() -> Self {
         Self {
