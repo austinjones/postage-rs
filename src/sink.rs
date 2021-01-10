@@ -78,6 +78,24 @@ pub enum PollSend<T> {
     Rejected(T),
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct SendError<T>(T);
+
+impl<T> std::fmt::Display for SendError<T>
+where
+    T: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SendError: ")?;
+
+        f.write_fmt(format_args!("{:?}", &self.0))?;
+
+        Ok(())
+    }
+}
+
+impl<T> std::error::Error for SendError<T> where T: std::fmt::Debug {}
+
 #[pin_project]
 pub struct SendFuture<'s, S: Sink> {
     send: &'s mut S,
@@ -97,7 +115,7 @@ impl<'s, S: Sink> SendFuture<'s, S> {
 }
 
 impl<'s, S: Sink + Unpin> Future for SendFuture<'s, S> {
-    type Output = Result<(), S::Item>;
+    type Output = Result<(), SendError<S::Item>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         if let None = self.value {
@@ -112,7 +130,7 @@ impl<'s, S: Sink + Unpin> Future for SendFuture<'s, S> {
                 *this.value = Some(value);
                 Poll::Pending
             }
-            crate::PollSend::Rejected(value) => Poll::Ready(Err(value)),
+            crate::PollSend::Rejected(value) => Poll::Ready(Err(SendError(value))),
         }
     }
 }

@@ -442,3 +442,23 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tokio_tests {
+    use super::channel;
+    use crate::{Sink, Stream};
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct Message(usize);
+
+    #[tokio::test]
+    async fn simple() {
+        let (mut tx, mut rx) = channel(2);
+
+        assert_eq!(Ok(()), tx.send(Message(0)).await);
+        assert_eq!(Ok(()), tx.send(Message(1)).await);
+
+        assert_eq!(Some(Message(0)), rx.recv().await);
+        assert_eq!(Some(Message(1)), rx.recv().await);
+    }
+}
