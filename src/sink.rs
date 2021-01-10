@@ -79,7 +79,7 @@ pub enum PollSend<T> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct SendError<T>(T);
+pub struct SendError<T>(pub T);
 
 impl<T> std::fmt::Display for SendError<T>
 where
