@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin};
+use std::{future::Future, marker::PhantomPinned, pin::Pin};
 
 use futures_task::{noop_waker, Context, Poll};
 use pin_project::pin_project;
@@ -15,13 +15,13 @@ mod map;
 mod merge;
 mod once;
 mod repeat;
-
+#[must_use = "streams do nothing unless polled"]
 pub trait Stream: Sized {
     type Item;
 
     fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item>;
 
-    fn recv(self) -> RecvFuture<Self> {
+    fn recv(&mut self) -> RecvFuture<Self> {
         RecvFuture::new(self)
     }
 
@@ -89,6 +89,17 @@ pub trait Stream: Sized {
     // fn fold(self) {}
 }
 
+impl<S> Stream for &mut S
+where
+    S: Stream + Unpin,
+{
+    type Item = S::Item;
+
+    fn poll_recv(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
+        S::poll_recv(Pin::new(&mut **self), cx)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollRecv<T> {
     /// An item is ready
@@ -107,24 +118,28 @@ pub enum TryRecvError {
 }
 
 #[pin_project]
-pub struct RecvFuture<R: Stream> {
+pub struct RecvFuture<'s, S: Stream> {
+    recv: &'s mut S,
     #[pin]
-    recv: R,
+    _pin: PhantomPinned,
 }
 
-impl<R: Stream> RecvFuture<R> {
-    pub fn new(recv: R) -> RecvFuture<R> {
-        Self { recv }
+impl<'s, S: Stream> RecvFuture<'s, S> {
+    pub fn new(recv: &'s mut S) -> RecvFuture<'s, S> {
+        Self {
+            recv,
+            _pin: PhantomPinned,
+        }
     }
 }
 
-impl<R: Stream> Future for RecvFuture<R> {
-    type Output = Option<R::Item>;
+impl<'s, S: Stream + Unpin> Future for RecvFuture<'s, S> {
+    type Output = Option<S::Item>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        match Stream::poll_recv(this.recv, cx) {
+        match Pin::new(this.recv).poll_recv(cx) {
             PollRecv::Ready(v) => Poll::Ready(Some(v)),
             PollRecv::Pending => Poll::Pending,
             PollRecv::Closed => Poll::Ready(None),

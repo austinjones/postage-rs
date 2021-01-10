@@ -1,5 +1,5 @@
-use std::task::Context;
 use std::{future::Future, pin::Pin, task::Poll};
+use std::{marker::PhantomPinned, task::Context};
 
 use futures_task::noop_waker;
 use pin_project::pin_project;
@@ -23,7 +23,7 @@ pub trait Sink: Sized {
         value: Self::Item,
     ) -> PollSend<Self::Item>;
 
-    fn send(self, value: Self::Item) -> SendFuture<Self> {
+    fn send(&mut self, value: Self::Item) -> SendFuture<Self> {
         SendFuture::new(self, value)
     }
 
@@ -53,6 +53,21 @@ pub trait Sink: Sized {
     }
 }
 
+impl<S> Sink for &mut S
+where
+    S: Sink + Unpin,
+{
+    type Item = S::Item;
+
+    fn poll_send(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        value: Self::Item,
+    ) -> PollSend<Self::Item> {
+        S::poll_send(Pin::new(&mut **self), cx, value)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollSend<T> {
     /// The item was accepted and sent
@@ -64,22 +79,24 @@ pub enum PollSend<T> {
 }
 
 #[pin_project]
-pub struct SendFuture<S: Sink> {
-    #[pin]
-    send: S,
+pub struct SendFuture<'s, S: Sink> {
+    send: &'s mut S,
     value: Option<S::Item>,
+    #[pin]
+    _pin: PhantomPinned,
 }
 
-impl<S: Sink> SendFuture<S> {
-    pub fn new(send: S, value: S::Item) -> SendFuture<S> {
+impl<'s, S: Sink> SendFuture<'s, S> {
+    pub fn new(send: &'s mut S, value: S::Item) -> SendFuture<S> {
         Self {
             send,
             value: Some(value),
+            _pin: PhantomPinned,
         }
     }
 }
 
-impl<S: Sink> Future for SendFuture<S> {
+impl<'s, S: Sink + Unpin> Future for SendFuture<'s, S> {
     type Output = Result<(), S::Item>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -89,7 +106,7 @@ impl<S: Sink> Future for SendFuture<S> {
 
         let this = self.project();
 
-        match Sink::poll_send(this.send, cx, this.value.take().unwrap()) {
+        match Pin::new(this.send).poll_send(cx, this.value.take().unwrap()) {
             crate::PollSend::Ready => Poll::Ready(Ok(())),
             crate::PollSend::Pending(value) => {
                 *this.value = Some(value);
