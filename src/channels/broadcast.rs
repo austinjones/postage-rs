@@ -175,7 +175,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Pending(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(2))
         );
     }
 
@@ -231,7 +231,10 @@ mod tests {
             Pin::new(&mut rx).poll_recv(&mut cx)
         );
 
-        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
     }
 
     #[test]
@@ -350,7 +353,10 @@ mod tests {
         );
 
         assert_eq!(1, w2_count.get());
-        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
 
         assert_eq!(1, w2_count.get());
     }
@@ -441,24 +447,255 @@ mod tests {
             Pin::new(&mut tx).poll_send(&mut cx, Message(3))
         );
     }
+
+    #[test]
+    fn wake_sender_on_disconnect() {
+        let (mut tx, rx) = channel(1);
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut w1_context, Message(1))
+        );
+
+        assert_eq!(
+            PollSend::Pending(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut w1_context, Message(2))
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(rx);
+
+        assert_eq!(1, w1_count.get());
+    }
+
+    #[test]
+    fn wake_receiver_on_disconnect() {
+        let (tx, mut rx) = channel::<()>(100);
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(tx);
+
+        assert_eq!(1, w1_count.get());
+    }
 }
 
 #[cfg(test)]
 mod tokio_tests {
-    use super::channel;
-    use crate::{Sink, Stream};
+    use tokio::task::spawn;
 
-    #[derive(Clone, PartialEq, Debug)]
-    struct Message(usize);
+    use crate::{
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, CHANNEL_TEST_SENDERS},
+        Sink, Stream,
+    };
 
     #[tokio::test]
     async fn simple() {
-        let (mut tx, mut rx) = channel(2);
+        let (mut tx, mut rx) = super::channel(4);
 
-        assert_eq!(Ok(()), tx.send(Message(0)).await);
-        assert_eq!(Ok(()), tx.send(Message(1)).await);
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
 
-        assert_eq!(Some(Message(0)), rx.recv().await);
-        assert_eq!(Some(Message(1)), rx.recv().await);
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_sender() {
+        let (tx, mut rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let mut channels = Channels::new(1);
+        while let Some(message) = rx.recv().await {
+            channels.assert_message(&message);
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_receiver() {
+        let (mut tx, rx) = super::channel(4);
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(1);
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await.expect("Assertion failure");
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_sender_multi_receiver() {
+        let (tx, rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_i| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await.expect("Assertion failure");
+        }
+    }
+}
+
+#[cfg(test)]
+mod async_std_tests {
+    use async_std::task::spawn;
+
+    use crate::{
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, CHANNEL_TEST_SENDERS},
+        Sink, Stream,
+    };
+
+    #[async_std::test]
+    async fn simple() {
+        let (mut tx, mut rx) = super::channel(4);
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
+    }
+
+    #[async_std::test]
+    async fn multi_sender() {
+        let (tx, mut rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let mut channels = Channels::new(1);
+        while let Some(message) = rx.recv().await {
+            channels.assert_message(&message);
+        }
+    }
+
+    #[async_std::test]
+    async fn multi_receiver() {
+        let (mut tx, rx) = super::channel(4);
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(1);
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await;
+        }
+    }
+
+    #[async_std::test]
+    async fn multi_sender_multi_receiver() {
+        let (tx, rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_i| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await;
+        }
     }
 }

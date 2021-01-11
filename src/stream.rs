@@ -1,4 +1,4 @@
-use std::{future::Future, marker::PhantomPinned, pin::Pin};
+use std::{future::Future, marker::PhantomPinned, ops::DerefMut, pin::Pin};
 
 use futures_task::{noop_waker, Context, Poll};
 use pin_project::pin_project;
@@ -25,7 +25,11 @@ pub trait Stream: Sized {
         RecvFuture::new(self)
     }
 
-    fn try_recv(pin: Pin<&mut Self>) -> Result<Self::Item, TryRecvError> {
+    fn try_recv(&mut self) -> Result<Self::Item, TryRecvError>
+    where
+        Self: Unpin,
+    {
+        let pin = Pin::new(self);
         let waker = noop_waker();
         let mut context = Context::from_waker(&waker);
 
@@ -97,6 +101,19 @@ where
 
     fn poll_recv(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         S::poll_recv(Pin::new(&mut **self), cx)
+    }
+}
+
+impl<P, S> Stream for Pin<P>
+where
+    P: DerefMut<Target = S> + Unpin,
+    S: Stream + Unpin,
+{
+    type Item = <S as Stream>::Item;
+
+    fn poll_recv(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
+        let this: &mut S = &mut *self.as_mut();
+        Pin::new(this).poll_recv(cx)
     }
 }
 

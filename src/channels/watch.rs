@@ -65,9 +65,8 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
-        if self.shared.extension().generation()
-            <= self.generation.load(std::sync::atomic::Ordering::SeqCst)
-        {
+        let stored_generation = self.shared.extension().generation(Ordering::Acquire);
+        if self.generation.load(std::sync::atomic::Ordering::SeqCst) > stored_generation {
             if self.shared.is_closed() {
                 return PollRecv::Closed;
             }
@@ -76,7 +75,8 @@ where
             return PollRecv::Pending;
         }
 
-        self.generation.fetch_add(1, Ordering::AcqRel);
+        self.generation
+            .store(stored_generation + 1, Ordering::Release);
         let borrow = self.shared.extension().value.read().unwrap();
         PollRecv::Ready(borrow.clone())
     }
@@ -112,8 +112,8 @@ impl<T> StateExtension<T> {
         self.generation.fetch_add(1, Ordering::SeqCst);
     }
 
-    pub fn generation(&self) -> usize {
-        self.generation.load(Ordering::SeqCst)
+    pub fn generation(&self, ordering: Ordering) -> usize {
+        self.generation.load(ordering)
     }
 }
 
@@ -165,6 +165,21 @@ mod tests {
             Pin::new(&mut rx).poll_recv(&mut cx)
         );
         assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn recv_default() {
+        let mut cx = panic_context();
+        let (_tx, mut rx) = channel();
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
     }
 
     #[test]
@@ -235,6 +250,10 @@ mod tests {
         let mut w1_context = Context::from_waker(&w1);
 
         assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+        assert_eq!(
             PollRecv::Pending,
             Pin::new(&mut rx).poll_recv(&mut w1_context)
         );
@@ -254,5 +273,78 @@ mod tests {
         );
 
         assert_eq!(1, w1_count.get());
+    }
+
+    #[test]
+    fn wake_receiver_on_disconnect() {
+        let (tx, mut rx) = channel::<State>();
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut panic_context())
+        );
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(tx);
+
+        assert_eq!(1, w1_count.get());
+    }
+}
+
+#[cfg(test)]
+mod tokio_tests {
+    use crate::{
+        test::{Channel, Message},
+        Sink, Stream,
+    };
+
+    #[tokio::test]
+    async fn simple() {
+        let (mut tx, mut rx) = super::channel();
+
+        tokio::task::spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
+    }
+}
+
+#[cfg(test)]
+mod async_std_tests {
+    use async_std::task::spawn;
+
+    use crate::{
+        test::{Channel, Message},
+        Sink, Stream,
+    };
+
+    #[async_std::test]
+    async fn simple() {
+        let (mut tx, mut rx) = super::channel();
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
     }
 }

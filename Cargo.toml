@@ -22,4 +22,11 @@ static_assertions = "1.1.0"
 
 [dev-dependencies]
 futures-test = "0.3"
-tokio = { version = "1.0", features = ["rt", "macros"] }
+tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
+async-std = { version = "1.8", features = ["attributes"] }
+
+# [[example]]
+# name = "tokio"
+
+# [[example]]
+# name = "async-std"

@@ -209,4 +209,131 @@ mod tests {
 
         assert_eq!(1, w_count.get());
     }
+
+    #[test]
+    fn wake_receiver_on_disconnect() {
+        let (tx, mut rx) = channel();
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(tx);
+
+        assert_eq!(1, w1_count.get());
+    }
+}
+
+#[cfg(test)]
+mod tokio_tests {
+    use std::time::Duration;
+
+    use tokio::{task::spawn, time::timeout};
+
+    use crate::{test::CHANNEL_TEST_RECEIVERS, Sink, Stream};
+
+    use super::Receiver;
+
+    async fn assert_rx(mut rx: Receiver) {
+        if let Err(_e) = timeout(Duration::from_millis(100), rx.recv()).await {
+            panic!("Timeout waiting for barrier");
+        }
+    }
+
+    #[tokio::test]
+    async fn simple() {
+        let (mut tx, rx) = super::channel();
+
+        tx.send(()).await.expect("Should send message");
+
+        assert_rx(rx).await;
+    }
+
+    #[tokio::test]
+    async fn simple_drop() {
+        let (tx, rx) = super::channel();
+
+        drop(tx);
+
+        assert_rx(rx).await;
+    }
+
+    #[tokio::test]
+    async fn multi_receiver() {
+        let (tx, rx) = super::channel();
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
+            let rx2 = rx.clone();
+
+            spawn(async move {
+                assert_rx(rx2).await;
+            })
+        });
+
+        drop(tx);
+
+        for handle in handles {
+            handle.await.expect("Assertion failure");
+        }
+    }
+}
+
+#[cfg(test)]
+mod async_std_tests {
+    use std::time::Duration;
+
+    use async_std::{future::timeout, task::spawn};
+
+    use crate::{test::CHANNEL_TEST_RECEIVERS, Sink, Stream};
+
+    use super::Receiver;
+
+    async fn assert_rx(mut rx: Receiver) {
+        if let Err(_e) = timeout(Duration::from_millis(100), rx.recv()).await {
+            panic!("Timeout waiting for barrier");
+        }
+    }
+
+    #[async_std::test]
+    async fn simple() {
+        let (mut tx, rx) = super::channel();
+
+        tx.send(()).await.expect("Should send message");
+
+        assert_rx(rx).await;
+    }
+
+    #[async_std::test]
+    async fn simple_drop() {
+        let (tx, rx) = super::channel();
+
+        drop(tx);
+
+        assert_rx(rx).await;
+    }
+
+    #[async_std::test]
+    async fn multi_receiver() {
+        let (tx, rx) = super::channel();
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
+            let rx2 = rx.clone();
+
+            spawn(async move {
+                assert_rx(rx2).await;
+            })
+        });
+
+        drop(tx);
+
+        for handle in handles {
+            handle.await;
+        }
+    }
 }

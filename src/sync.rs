@@ -3,6 +3,8 @@ use std::{sync::Arc, task::Waker};
 use notifier::Notifier;
 use ref_count::RefCount;
 
+use self::ref_count::TryDecrement;
+
 pub mod mpmc_circular_buffer;
 pub mod notifier;
 mod oneshot_cell;
@@ -81,7 +83,12 @@ impl<E> Clone for SenderShared<E> {
 
 impl<E> Drop for SenderShared<E> {
     fn drop(&mut self) {
-        self.inner.sender_count.decrement()
+        match self.inner.sender_count.decrement() {
+            TryDecrement::Alive => {}
+            TryDecrement::Dead => {
+                self.notify_receivers();
+            }
+        }
     }
 }
 
@@ -122,6 +129,11 @@ impl<E> Clone for ReceiverShared<E> {
 
 impl<E> Drop for ReceiverShared<E> {
     fn drop(&mut self) {
-        self.inner.receiver_count.decrement()
+        match self.inner.receiver_count.decrement() {
+            TryDecrement::Alive => {}
+            TryDecrement::Dead => {
+                self.notify_senders();
+            }
+        }
     }
 }

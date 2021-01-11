@@ -184,3 +184,39 @@ mod tests {
         assert_eq!(1, w1_count.get());
     }
 }
+
+#[cfg(test)]
+mod tokio_tests {
+    use tokio::task::spawn;
+
+    use crate::{Sink, Stream};
+
+    use super::channel;
+
+    #[tokio::test]
+    async fn simple() {
+        let (mut tx, mut rx) = channel();
+
+        spawn(async move { tx.send(100usize).await });
+
+        assert_eq!(Some(100usize), rx.recv().await);
+    }
+}
+
+#[cfg(test)]
+mod async_std_tests {
+    use async_std::task::spawn;
+
+    use crate::{Sink, Stream};
+
+    use super::channel;
+
+    #[async_std::test]
+    async fn simple() {
+        let (mut tx, mut rx) = channel();
+
+        spawn(async move { tx.send(100usize).await });
+
+        assert_eq!(Some(100usize), rx.recv().await);
+    }
+}

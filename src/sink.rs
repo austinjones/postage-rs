@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, task::Poll};
+use std::{future::Future, ops::DerefMut, pin::Pin, task::Poll};
 use std::{marker::PhantomPinned, task::Context};
 
 use futures_task::noop_waker;
@@ -27,7 +27,12 @@ pub trait Sink: Sized {
         SendFuture::new(self, value)
     }
 
-    fn try_send(pin: Pin<&mut Self>, value: Self::Item) -> Result<(), TrySendError<Self::Item>> {
+    fn try_send(&mut self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
+    where
+        Self: Unpin,
+    {
+        let pin = Pin::new(self);
+
         let waker = noop_waker();
         let mut context = Context::from_waker(&waker);
 
@@ -65,6 +70,23 @@ where
         value: Self::Item,
     ) -> PollSend<Self::Item> {
         S::poll_send(Pin::new(&mut **self), cx, value)
+    }
+}
+
+impl<P, S> Sink for Pin<P>
+where
+    P: DerefMut<Target = S> + Unpin,
+    S: Sink + Unpin,
+{
+    type Item = <S as Sink>::Item;
+
+    fn poll_send(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        value: Self::Item,
+    ) -> PollSend<Self::Item> {
+        let this: &mut S = &mut *self.as_mut();
+        Pin::new(this).poll_send(cx, value)
     }
 }
 

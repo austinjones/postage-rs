@@ -172,7 +172,10 @@ mod tests {
             Pin::new(&mut rx).poll_recv(&mut cx)
         );
 
-        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
     }
 
     #[test]
@@ -261,7 +264,10 @@ mod tests {
         );
 
         assert_eq!(1, w2_count.get());
-        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
 
         assert_eq!(1, w2_count.get());
     }
@@ -294,5 +300,142 @@ mod tests {
         );
 
         assert_eq!(1, w1_count.get());
+    }
+
+    #[test]
+    fn wake_sender_on_disconnect() {
+        let (mut tx, rx) = channel(1);
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut w1_context, Message(1))
+        );
+
+        assert_eq!(
+            PollSend::Pending(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut w1_context, Message(2))
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(rx);
+
+        assert_eq!(1, w1_count.get());
+    }
+
+    #[test]
+    fn wake_receiver_on_disconnect() {
+        let (tx, mut rx) = channel::<()>(100);
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(tx);
+
+        assert_eq!(1, w1_count.get());
+    }
+}
+
+#[cfg(test)]
+mod tokio_tests {
+    use tokio::task::spawn;
+
+    use crate::{
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS},
+        Sink, Stream,
+    };
+
+    #[tokio::test]
+    async fn simple() {
+        let (mut tx, mut rx) = super::channel(4);
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_sender() {
+        let (tx, mut rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let mut channels = Channels::new(1);
+        while let Some(message) = rx.recv().await {
+            channels.assert_message(&message);
+        }
+    }
+}
+
+#[cfg(test)]
+mod async_std_tests {
+    use async_std::task::spawn;
+
+    use crate::{
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS},
+        Sink, Stream,
+    };
+
+    #[async_std::test]
+    async fn simple() {
+        let (mut tx, mut rx) = super::channel(4);
+
+        spawn(async move {
+            for message in Message::new_iter(0) {
+                tx.send(message);
+            }
+        });
+
+        let mut channel = Channel::new(0);
+        while let Some(message) = rx.recv().await {
+            channel.assert_message(&message);
+        }
+    }
+
+    #[async_std::test]
+    async fn multi_sender() {
+        let (tx, mut rx) = super::channel(4);
+
+        for i in 0..CHANNEL_TEST_SENDERS {
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(i) {
+                    tx2.send(message);
+                }
+            });
+        }
+
+        drop(tx);
+
+        let mut channels = Channels::new(1);
+        while let Some(message) = rx.recv().await {
+            channels.assert_message(&message);
+        }
     }
 }

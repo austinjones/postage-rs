@@ -2,6 +2,8 @@ use std::{cell::UnsafeCell, sync::atomic::AtomicUsize};
 
 use atomic::{Atomic, Ordering};
 
+use super::ref_count::{RefCount, TryDecrement};
+
 // A lock-free multi-producer, multi-consumer circular buffer
 // Each reader will see each value created exactly once.
 // Cloned readers inherit the read location of the reader that was cloned.
@@ -187,23 +189,24 @@ impl BufferReader {
         let slot = buffer.get(id);
 
         if id == buffer.tail.load(Ordering::Acquire) {
-            if let Ok(_) = slot
-                .readers
-                .compare_exchange(1, 0, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                let next_id = buffer.index(id + 1);
+            match slot.readers.decrement() {
+                TryDecrement::Alive => {}
+                TryDecrement::Dead => {
+                    let next_id = buffer.index(id + 1);
 
-                // todo: figure out how to remove unwrap
-                buffer
-                    .tail
-                    .compare_exchange(id, next_id, Ordering::AcqRel, Ordering::Relaxed)
-                    .unwrap();
+                    // todo: figure out how to remove unwrap
+                    buffer
+                        .tail
+                        .compare_exchange(id, next_id, Ordering::AcqRel, Ordering::Relaxed)
+                        .unwrap();
 
-                return TryRelease::Complete;
+                    return TryRelease::Complete;
+                }
             }
+        } else {
+            slot.readers.decrement();
         }
 
-        slot.readers.fetch_sub(1, Ordering::AcqRel);
         TryRelease::Released
     }
 }
@@ -220,7 +223,7 @@ enum TryRelease {
 struct Slot<T> {
     value: UnsafeCell<Option<T>>,
     state: Atomic<SlotState>,
-    readers: AtomicUsize,
+    readers: RefCount,
 }
 
 unsafe impl<T> Sync for Slot<T> where T: Clone + Send {}
@@ -230,12 +233,12 @@ impl<T> Slot<T> {
         Self {
             value: UnsafeCell::new(None),
             state: Atomic::new(SlotState::None),
-            readers: AtomicUsize::new(0),
+            readers: RefCount::new(0),
         }
     }
 
     pub fn add_reader(&self) {
-        self.readers.fetch_add(1, Ordering::AcqRel);
+        self.readers.increment();
     }
 
     pub fn write(&self, value: T) -> Result<(), (SlotState, T)> {
