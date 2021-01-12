@@ -16,12 +16,15 @@ mod merge;
 mod once;
 mod repeat;
 #[must_use = "streams do nothing unless polled"]
-pub trait Stream: Sized {
+pub trait Stream {
     type Item;
 
     fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item>;
 
-    fn recv(&mut self) -> RecvFuture<Self> {
+    fn recv(&mut self) -> RecvFuture<'_, Self>
+    where
+        Self: Unpin,
+    {
         RecvFuture::new(self)
     }
 
@@ -54,13 +57,14 @@ pub trait Stream: Sized {
     fn map<Map, Into>(self, map: Map) -> MapStream<Self, Map, Into>
     where
         Map: Fn(Self::Item) -> Into,
+        Self: Sized,
     {
         MapStream::new(self, map)
     }
 
     fn filter<Filter>(self, filter: Filter) -> FilterStream<Self, Filter>
     where
-        Self: Unpin,
+        Self: Sized + Unpin,
         Filter: FnMut(&Self::Item) -> bool + Unpin,
     {
         FilterStream::new(self, filter)
@@ -69,6 +73,7 @@ pub trait Stream: Sized {
     fn merge<Other>(self, other: Other) -> MergeStream<Self, Other>
     where
         Other: Stream<Item = Self::Item>,
+        Self: Sized,
     {
         MergeStream::new(self, other)
     }
@@ -76,13 +81,14 @@ pub trait Stream: Sized {
     fn chain<Other>(self, other: Other) -> ChainStream<Self, Other>
     where
         Other: Stream<Item = Self::Item>,
+        Self: Sized,
     {
         ChainStream::new(self, other)
     }
 
     fn find<Condition>(self, condition: Condition) -> FindStream<Self, Condition>
     where
-        Self: Unpin,
+        Self: Sized + Unpin,
         Condition: Fn(&Self::Item) -> bool + Unpin,
     {
         FindStream::new(self, condition)
@@ -95,7 +101,7 @@ pub trait Stream: Sized {
 
 impl<S> Stream for &mut S
 where
-    S: Stream + Unpin,
+    S: Stream + Unpin + ?Sized,
 {
     type Item = S::Item;
 
@@ -107,13 +113,12 @@ where
 impl<P, S> Stream for Pin<P>
 where
     P: DerefMut<Target = S> + Unpin,
-    S: Stream + Unpin,
+    S: Stream + Unpin + ?Sized,
 {
     type Item = <S as Stream>::Item;
 
-    fn poll_recv(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
-        let this: &mut S = &mut *self.as_mut();
-        Pin::new(this).poll_recv(cx)
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
+        Pin::get_mut(self).as_mut().poll_recv(cx)
     }
 }
 
@@ -135,13 +140,19 @@ pub enum TryRecvError {
 }
 
 #[pin_project]
-pub struct RecvFuture<'s, S: Stream> {
+pub struct RecvFuture<'s, S>
+where
+    S: Stream + ?Sized,
+{
     recv: &'s mut S,
     #[pin]
     _pin: PhantomPinned,
 }
 
-impl<'s, S: Stream> RecvFuture<'s, S> {
+impl<'s, S: Stream> RecvFuture<'s, S>
+where
+    S: ?Sized,
+{
     pub fn new(recv: &'s mut S) -> RecvFuture<'s, S> {
         Self {
             recv,
@@ -150,7 +161,10 @@ impl<'s, S: Stream> RecvFuture<'s, S> {
     }
 }
 
-impl<'s, S: Stream + Unpin> Future for RecvFuture<'s, S> {
+impl<'s, S> Future for RecvFuture<'s, S>
+where
+    S: Stream + Unpin + ?Sized,
+{
     type Output = Option<S::Item>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

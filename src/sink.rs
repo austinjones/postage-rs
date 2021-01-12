@@ -14,7 +14,7 @@ pub enum TrySendError<T> {
     Rejected(T),
 }
 
-pub trait Sink: Sized {
+pub trait Sink {
     type Item;
 
     fn poll_send(
@@ -46,6 +46,7 @@ pub trait Sink: Sized {
     fn after<Before>(self, before: Before) -> chain::SinkChain<Before, Self>
     where
         Before: Sink<Item = Self::Item>,
+        Self: Sized,
     {
         chain::SinkChain::new(before, self)
     }
@@ -53,6 +54,7 @@ pub trait Sink: Sized {
     fn filter<Filter>(self, filter: Filter) -> filter::SinkFilter<Filter, Self>
     where
         Filter: FnMut(&Self::Item) -> bool,
+        Self: Sized,
     {
         filter::SinkFilter::new(filter, self)
     }
@@ -60,7 +62,7 @@ pub trait Sink: Sized {
 
 impl<S> Sink for &mut S
 where
-    S: Sink + Unpin,
+    S: Sink + Unpin + ?Sized,
 {
     type Item = S::Item;
 
@@ -76,17 +78,16 @@ where
 impl<P, S> Sink for Pin<P>
 where
     P: DerefMut<Target = S> + Unpin,
-    S: Sink + Unpin,
+    S: Sink + Unpin + ?Sized,
 {
     type Item = <S as Sink>::Item;
 
     fn poll_send(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        let this: &mut S = &mut *self.as_mut();
-        Pin::new(this).poll_send(cx, value)
+        Pin::get_mut(self).as_mut().poll_send(cx, value)
     }
 }
 
@@ -119,14 +120,21 @@ where
 impl<T> std::error::Error for SendError<T> where T: std::fmt::Debug {}
 
 #[pin_project]
-pub struct SendFuture<'s, S: Sink> {
+pub struct SendFuture<'s, S>
+where
+    S: Sink + ?Sized,
+{
+    #[pin]
     send: &'s mut S,
     value: Option<S::Item>,
     #[pin]
     _pin: PhantomPinned,
 }
 
-impl<'s, S: Sink> SendFuture<'s, S> {
+impl<'s, S> SendFuture<'s, S>
+where
+    S: Sink + ?Sized,
+{
     pub fn new(send: &'s mut S, value: S::Item) -> SendFuture<S> {
         Self {
             send,
@@ -136,7 +144,10 @@ impl<'s, S: Sink> SendFuture<'s, S> {
     }
 }
 
-impl<'s, S: Sink + Unpin> Future for SendFuture<'s, S> {
+impl<'s, S> Future for SendFuture<'s, S>
+where
+    S: Sink + Unpin + ?Sized,
+{
     type Output = Result<(), SendError<S::Item>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -146,7 +157,7 @@ impl<'s, S: Sink + Unpin> Future for SendFuture<'s, S> {
 
         let this = self.project();
 
-        match Pin::new(this.send).poll_send(cx, this.value.take().unwrap()) {
+        match this.send.poll_send(cx, this.value.take().unwrap()) {
             crate::PollSend::Ready => Poll::Ready(Ok(())),
             crate::PollSend::Pending(value) => {
                 *this.value = Some(value);
