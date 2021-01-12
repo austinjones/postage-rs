@@ -1,4 +1,4 @@
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, pin::Pin, task::Context};
 
 use atomic::{Atomic, Ordering};
 
@@ -27,10 +27,7 @@ impl<T> OnceStream<T> {
 impl<T> Stream for OnceStream<T> {
     type Item = T;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         if let Ok(_) = self.state.compare_exchange(
             State::Ready,
             State::Taken,

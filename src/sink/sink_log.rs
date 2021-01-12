@@ -1,7 +1,7 @@
 use crate::{PollSend, Sink};
 use log::log_enabled;
 use pin_project::pin_project;
-use std::fmt::Debug;
+use std::{fmt::Debug, pin::Pin, task::Context};
 
 #[pin_project]
 pub struct SinkLog<S> {
@@ -24,8 +24,8 @@ where
     type Item = S::Item;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         let this = self.project();

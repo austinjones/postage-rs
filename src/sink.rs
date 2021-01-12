@@ -62,6 +62,7 @@ pub trait Sink {
     fn log(self, level: log::Level) -> sink_log::SinkLog<Self>
     where
         Self: Sized,
+        Self::Item: std::fmt::Debug,
     {
         sink_log::SinkLog::new(self, level)
     }

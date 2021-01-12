@@ -105,6 +105,7 @@ pub trait Stream {
     fn log(self, level: log::Level) -> stream_log::StreamLog<Self>
     where
         Self: Sized,
+        Self::Item: std::fmt::Debug,
     {
         stream_log::StreamLog::new(self, level)
     }

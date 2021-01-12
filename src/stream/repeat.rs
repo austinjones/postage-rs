@@ -1,3 +1,5 @@
+use std::{pin::Pin, task::Context};
+
 use crate::{PollRecv, Stream};
 
 pub struct RepeatStream<T> {
@@ -19,10 +21,7 @@ where
 {
     type Item = T;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        _cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         return PollRecv::Ready(self.data.clone());
     }
 }

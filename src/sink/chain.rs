@@ -1,6 +1,7 @@
 use crate::{PollSend, Sink};
 use atomic::{Atomic, Ordering};
 use pin_project::pin_project;
+use std::{pin::Pin, task::Context};
 
 #[derive(Copy, Clone)]
 enum State {
@@ -40,8 +41,8 @@ where
     type Item = Left::Item;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         mut value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         let this = self.project();

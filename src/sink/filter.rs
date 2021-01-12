@@ -1,3 +1,5 @@
+use std::{pin::Pin, task::Context};
+
 use crate::{PollSend, Sink};
 use pin_project::pin_project;
 
@@ -26,8 +28,8 @@ where
     type Item = Into::Item;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
         value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         let this = self.project();

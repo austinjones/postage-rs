@@ -1,4 +1,4 @@
-use std::pin::Pin;
+use std::{pin::Pin, task::Context};
 
 use crate::{PollRecv, Stream};
 
@@ -24,10 +24,7 @@ where
 {
     type Item = From::Item;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         let this = self.get_mut();
         loop {
             let from = Pin::new(&mut this.from);

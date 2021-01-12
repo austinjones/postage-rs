@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, pin::Pin, task::Context};
 
 use crate::{PollRecv, Stream};
 use pin_project::pin_project;
@@ -33,10 +33,7 @@ where
 {
     type Item = Into;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         let this = self.project();
 
         match this.from.poll_recv(cx) {

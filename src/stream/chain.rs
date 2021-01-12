@@ -1,3 +1,5 @@
+use std::{pin::Pin, task::Context};
+
 use atomic::{Atomic, Ordering};
 
 use crate::{PollRecv, Stream};
@@ -40,10 +42,7 @@ where
 {
     type Item = Left::Item;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         let this = self.project();
         let mut state = this.state.load(Ordering::Acquire);
 

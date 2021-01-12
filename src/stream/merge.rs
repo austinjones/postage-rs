@@ -2,6 +2,7 @@ use atomic::{Atomic, Ordering};
 
 use crate::{PollRecv, Stream};
 use pin_project::pin_project;
+use std::{pin::Pin, task::Context};
 
 #[derive(Copy, Clone)]
 enum State {
@@ -20,7 +21,7 @@ impl State {
 
 #[pin_project]
 pub struct MergeStream<Left, Right> {
-    state: Atomic<State>,
+    state: State,
     #[pin]
     left: Left,
     #[pin]
@@ -34,7 +35,7 @@ where
 {
     pub fn new(left: Left, right: Right) -> Self {
         Self {
-            state: Atomic::new(State::Left),
+            state: State::Left,
             left,
             right,
         }
@@ -48,25 +49,53 @@ where
 {
     type Item = Left::Item;
 
-    fn poll_recv(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut futures_task::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
         let this = self.project();
 
-        let state = this.state.load(Ordering::Acquire);
-        let poll = match state {
-            State::Left => this.left.poll_recv(cx),
-            State::Right => this.right.poll_recv(cx),
+        let poll = match this.state {
+            State::Left => poll(this.left, this.right, cx),
+            State::Right => poll(this.right, this.left, cx),
         };
 
-        match poll {
-            PollRecv::Ready(v) => {
-                this.state.store(state.swap(), Ordering::Release);
-                PollRecv::Ready(v)
-            }
-            PollRecv::Pending => PollRecv::Pending,
-            PollRecv::Closed => PollRecv::Closed,
+        if poll.swap() {
+            *this.state = this.state.swap();
         }
+
+        poll.into_recv()
+    }
+}
+
+enum MergePoll<T> {
+    First(PollRecv<T>),
+    Second(PollRecv<T>),
+}
+
+impl<T> MergePoll<T> {
+    pub fn into_recv(self) -> PollRecv<T> {
+        match self {
+            MergePoll::First(p) => p,
+            MergePoll::Second(p) => p,
+        }
+    }
+
+    pub fn swap(&self) -> bool {
+        match self {
+            MergePoll::First(_) => true,
+            MergePoll::Second(PollRecv::Ready(_)) => true,
+            MergePoll::Second(PollRecv::Pending) => true,
+            MergePoll::Second(PollRecv::Closed) => false,
+        }
+    }
+}
+
+fn poll<A, B>(first: Pin<&mut A>, second: Pin<&mut B>, cx: &mut Context<'_>) -> MergePoll<A::Item>
+where
+    A: Stream,
+    B: Stream<Item = A::Item>,
+{
+    match first.poll_recv(cx) {
+        PollRecv::Ready(v) => MergePoll::First(PollRecv::Ready(v)),
+        PollRecv::Pending => MergePoll::Second(second.poll_recv(cx)),
+        PollRecv::Closed => MergePoll::Second(second.poll_recv(cx)),
     }
 }
