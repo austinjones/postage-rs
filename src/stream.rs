@@ -9,12 +9,16 @@ use self::{
 };
 
 mod chain;
+mod errors;
 mod filter;
 mod find;
 mod map;
 mod merge;
 mod once;
 mod repeat;
+
+pub use errors::*;
+
 #[must_use = "streams do nothing unless polled"]
 pub trait Stream {
     type Item;
@@ -130,13 +134,6 @@ pub enum PollRecv<T> {
     Pending,
     /// The channel is closed, and no messages will ever be delivered
     Closed,
-}
-
-pub enum TryRecvError {
-    /// The stream may produce an item at a later time
-    Pending,
-    /// The stream is closed, and will never produce an item
-    Rejected,
 }
 
 #[pin_project]

@@ -5,14 +5,10 @@ use futures_task::noop_waker;
 use pin_project::pin_project;
 
 mod chain;
+mod errors;
 mod filter;
 
-pub enum TrySendError<T> {
-    /// The sink could accept the item at a later time
-    Pending(T),
-    /// The sink is closed, and will never accept the item
-    Rejected(T),
-}
+pub use errors::*;
 
 pub trait Sink {
     type Item;
@@ -100,24 +96,6 @@ pub enum PollSend<T> {
     /// The sender has been closed, and cannot send the item
     Rejected(T),
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct SendError<T>(pub T);
-
-impl<T> std::fmt::Display for SendError<T>
-where
-    T: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("SendError: ")?;
-
-        f.write_fmt(format_args!("{:?}", &self.0))?;
-
-        Ok(())
-    }
-}
-
-impl<T> std::error::Error for SendError<T> where T: std::fmt::Debug {}
 
 #[pin_project]
 pub struct SendFuture<'s, S>
