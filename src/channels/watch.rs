@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicUsize, Ordering},
-    RwLock,
+use std::{
+    ops::Deref,
+    sync::{
+        atomic::{AtomicUsize, Ordering},
+        RwLock, RwLockReadGuard,
+    },
 };
 
 use static_assertions::{assert_impl_all, assert_not_impl_all};
@@ -88,6 +91,24 @@ impl<T> Clone for Receiver<T> {
             shared: self.shared.clone(),
             generation: AtomicUsize::new(0),
         }
+    }
+}
+pub struct Ref<'t, T> {
+    pub(in crate::channels::watch) lock: RwLockReadGuard<'t, T>,
+}
+
+impl<'t, T> Deref for Ref<'t, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.lock
+    }
+}
+
+impl<T> Receiver<T> {
+    pub fn borrow(&self) -> Ref<'_, T> {
+        let lock = self.shared.extension().value.read().unwrap();
+        Ref { lock }
     }
 }
 
@@ -180,6 +201,26 @@ mod tests {
             PollRecv::Pending,
             Pin::new(&mut rx).poll_recv(&mut noop_context())
         );
+    }
+
+    #[test]
+    fn borrow_default() {
+        let (_tx, rx) = channel();
+
+        assert_eq!(&State(0), &*rx.borrow());
+    }
+
+    #[test]
+    fn borrow_sent() {
+        let mut cx = panic_context();
+        let (mut tx, rx) = channel();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, State(1))
+        );
+
+        assert_eq!(&State(1), &*rx.borrow());
     }
 
     #[test]
