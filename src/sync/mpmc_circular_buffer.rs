@@ -154,13 +154,13 @@ impl BufferReader {
 
                     next_slot.add_reader();
 
+                    let value = unsafe { slot.clone_value() };
+
                     match self.try_release(slot_id, buffer) {
                         TryRelease::Released => {
-                            let value = unsafe { slot.clone_value() };
                             return TryRead::Reading(value);
                         }
                         TryRelease::Complete => {
-                            let value = unsafe { slot.take_value() };
                             slot.state.store(SlotState::None, Ordering::Release);
 
                             return TryRead::Complete(value);
