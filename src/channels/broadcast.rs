@@ -69,6 +69,15 @@ where
     }
 }
 
+impl<T> Sender<T> {
+    pub fn subscribe(&self) -> Receiver<T> {
+        let shared = self.shared.clone_receiver();
+        let reader = shared.extension().new_reader();
+
+        Receiver { shared, reader }
+    }
+}
+
 pub struct Receiver<T> {
     shared: ReceiverShared<MpmcCircularBuffer<T>>,
     reader: BufferReader,
@@ -196,6 +205,32 @@ mod tests {
 
         assert_eq!(PollSend::Ready, tx.poll_send(&mut cx, Message(1)));
         assert_eq!(PollRecv::Ready(Message(1)), rx.poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn sender_subscribe() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel(2);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        let mut rx2 = tx.subscribe();
+        assert_eq!(PollRecv::Pending, Pin::new(&mut rx2).poll_recv(&mut cx));
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
+        assert_eq!(
+            PollRecv::Ready(Message(2)),
+            Pin::new(&mut rx2).poll_recv(&mut cx)
+        );
     }
 
     #[test]

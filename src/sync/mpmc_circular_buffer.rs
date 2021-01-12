@@ -94,6 +94,16 @@ impl<T> MpmcCircularBuffer<T> {
         }
     }
 
+    pub fn new_reader(&self) -> BufferReader {
+        // TODO: examine for race conditions/consistency
+        let index = self.head.load(Ordering::Acquire);
+        self.get(index).add_reader();
+
+        BufferReader {
+            index: AtomicUsize::new(index),
+        }
+    }
+
     pub(in crate::sync::mpmc_circular_buffer) fn index(&self, location: usize) -> usize {
         location % self.buffer.len()
     }

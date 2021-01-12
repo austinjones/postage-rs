@@ -67,6 +67,12 @@ impl<E> SenderShared<E> {
         self.inner.receiver_count.is_alive()
     }
 
+    pub fn clone_receiver(&self) -> ReceiverShared<E> {
+        ReceiverShared {
+            inner: self.inner.clone(),
+        }
+    }
+
     pub fn is_closed(&self) -> bool {
         !self.is_alive()
     }
