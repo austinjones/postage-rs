@@ -68,6 +68,8 @@ impl<E> SenderShared<E> {
     }
 
     pub fn clone_receiver(&self) -> ReceiverShared<E> {
+        self.inner.receiver_count.increment();
+
         ReceiverShared {
             inner: self.inner.clone(),
         }
