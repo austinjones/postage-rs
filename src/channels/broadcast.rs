@@ -525,6 +525,30 @@ mod tests {
 
         assert_eq!(1, w1_count.get());
     }
+
+    #[test]
+    fn reader_bounds_bug() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel(1);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
+        assert_eq!(
+            PollRecv::Ready(Message(2)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+    }
 }
 
 #[cfg(test)]

@@ -143,7 +143,7 @@ impl BufferReader {
                     debug_assert!(slot.readers.load(Ordering::Acquire) > 0);
                     if let Err(_) = self.index.compare_exchange(
                         slot_id,
-                        slot_id + 1,
+                        next_slot_id,
                         Ordering::AcqRel,
                         Ordering::Relaxed,
                     ) {
