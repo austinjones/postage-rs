@@ -17,6 +17,9 @@ mod merge;
 mod once;
 mod repeat;
 
+#[cfg(feature = "logging")]
+mod stream_log;
+
 pub use errors::*;
 
 #[must_use = "streams do nothing unless polled"]
@@ -98,9 +101,13 @@ pub trait Stream {
         FindStream::new(self, condition)
     }
 
-    // fn zip(self) {}
-
-    // fn fold(self) {}
+    #[cfg(feature = "logging")]
+    fn log(self, level: log::Level) -> stream_log::StreamLog<Self>
+    where
+        Self: Sized,
+    {
+        stream_log::StreamLog::new(self, level)
+    }
 }
 
 impl<S> Stream for &mut S

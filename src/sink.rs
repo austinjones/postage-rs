@@ -8,6 +8,9 @@ mod chain;
 mod errors;
 mod filter;
 
+#[cfg(feature = "logging")]
+mod sink_log;
+
 pub use errors::*;
 
 pub trait Sink {
@@ -53,6 +56,14 @@ pub trait Sink {
         Self: Sized,
     {
         filter::SinkFilter::new(filter, self)
+    }
+
+    #[cfg(feature = "logging")]
+    fn log(self, level: log::Level) -> sink_log::SinkLog<Self>
+    where
+        Self: Sized,
+    {
+        sink_log::SinkLog::new(self, level)
     }
 }
 
