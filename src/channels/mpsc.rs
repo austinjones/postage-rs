@@ -355,13 +355,13 @@ mod tokio_tests {
         Sink, Stream,
     };
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn simple() {
         let (mut tx, mut rx) = super::channel(4);
 
-        spawn(async move {
+        let join = spawn(async move {
             for message in Message::new_iter(0) {
-                tx.send(message);
+                tx.send(message).await.expect("send failed");
             }
         });
 
@@ -369,9 +369,10 @@ mod tokio_tests {
         while let Some(message) = rx.recv().await {
             channel.assert_message(&message);
         }
+        join.await.expect("Join failed");
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread")]
     async fn multi_sender() {
         let (tx, mut rx) = super::channel(4);
 
@@ -379,14 +380,14 @@ mod tokio_tests {
             let mut tx2 = tx.clone();
             spawn(async move {
                 for message in Message::new_iter(i) {
-                    tx2.send(message);
+                    tx2.send(message).await.expect("send failed");
                 }
             });
         }
 
         drop(tx);
 
-        let mut channels = Channels::new(1);
+        let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
         while let Some(message) = rx.recv().await {
             channels.assert_message(&message);
         }
@@ -408,7 +409,7 @@ mod async_std_tests {
 
         spawn(async move {
             for message in Message::new_iter(0) {
-                tx.send(message);
+                tx.send(message).await.expect("send failed");
             }
         });
 
@@ -426,14 +427,14 @@ mod async_std_tests {
             let mut tx2 = tx.clone();
             spawn(async move {
                 for message in Message::new_iter(i) {
-                    tx2.send(message);
+                    tx2.send(message).await.expect("send failed");
                 }
             });
         }
 
         drop(tx);
 
-        let mut channels = Channels::new(1);
+        let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
         while let Some(message) = rx.recv().await {
             channels.assert_message(&message);
         }

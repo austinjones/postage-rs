@@ -2,6 +2,7 @@ use std::{sync::Arc, task::Waker};
 
 use notifier::Notifier;
 use ref_count::RefCount;
+use std::fmt::Debug;
 
 use self::ref_count::TryDecrement;
 
@@ -9,6 +10,7 @@ pub mod mpmc_circular_buffer;
 pub mod notifier;
 mod oneshot_cell;
 mod ref_count;
+mod rr_lock;
 mod state_cell;
 pub(crate) mod transfer;
 
@@ -26,6 +28,7 @@ pub(crate) fn shared<E>(extension: E) -> (SenderShared<E>, ReceiverShared<E>) {
     (sender, receiver)
 }
 
+#[derive(Debug)]
 pub struct Shared<E> {
     sender_notify: Notifier,
     sender_count: RefCount,
@@ -77,6 +80,15 @@ impl<E> SenderShared<E> {
 
     pub fn is_closed(&self) -> bool {
         !self.is_alive()
+    }
+}
+
+impl<E> Debug for SenderShared<E>
+where
+    E: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.inner.fmt(f)
     }
 }
 

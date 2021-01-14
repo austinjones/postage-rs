@@ -26,6 +26,7 @@ log = { version = "0.4", optional = true }
 futures-test = "0.3"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
 async-std = { version = "1.8", features = ["attributes"] }
+simple_logger = { version = "1.11.0" }
 
 [features]
 default = ["logging"]

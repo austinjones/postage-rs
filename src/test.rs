@@ -1,7 +1,8 @@
-pub const CHANNEL_TEST_ITERATIONS: usize = 1_000_000;
+pub const CHANNEL_TEST_ITERATIONS: usize = 2500;
 pub const CHANNEL_TEST_SENDERS: usize = 10;
 pub const CHANNEL_TEST_RECEIVERS: usize = 10;
 
+// TODO: iterators over channel sender/receiver counts, channel sizes
 pub struct MessageIter<I> {
     sender: usize,
     iter: I,
@@ -79,8 +80,10 @@ impl Channel {
 
     #[track_caller]
     pub fn assert_message(&mut self, message: &Message) {
-        assert_eq!(self.sender, message.sender);
-        assert_eq!(self.current_index, message.index);
+        assert_eq!(
+            (self.sender, self.current_index),
+            (message.sender, message.index)
+        );
         self.current_index += 1;
     }
 }

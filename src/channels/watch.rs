@@ -352,8 +352,11 @@ mod tokio_tests {
         let (mut tx, mut rx) = super::channel();
 
         tokio::task::spawn(async move {
-            for message in Message::new_iter(0) {
-                tx.send(message);
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                tx.send(message).await.expect("send failed");
             }
         });
 
@@ -378,8 +381,11 @@ mod async_std_tests {
         let (mut tx, mut rx) = super::channel();
 
         spawn(async move {
-            for message in Message::new_iter(0) {
-                tx.send(message);
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                tx.send(message).await.expect("send failed");
             }
         });
 

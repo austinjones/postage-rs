@@ -145,6 +145,7 @@ pub enum PollRecv<T> {
 }
 
 #[pin_project]
+#[must_use = "futures do nothing unless polled"]
 pub struct RecvFuture<'s, S>
 where
     S: Stream + ?Sized,

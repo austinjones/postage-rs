@@ -110,6 +110,7 @@ pub enum PollSend<T> {
 }
 
 #[pin_project]
+#[must_use = "futures do nothing unless polled"]
 pub struct SendFuture<'s, S>
 where
     S: Sink + ?Sized,

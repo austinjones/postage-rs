@@ -1,5 +1,8 @@
 use std::{collections::LinkedList, sync::Mutex, task::Waker};
 
+use log::info;
+
+#[derive(Debug)]
 pub struct Notifier {
     wakers: Mutex<LinkedList<Waker>>,
 }
@@ -13,10 +16,14 @@ impl Notifier {
 
     pub fn notify(&self) {
         let mut wakers = self.wakers.lock().unwrap();
+        let mut woken = 0usize;
 
         while let Some(waker) = wakers.pop_back() {
+            woken += 1;
             waker.wake();
         }
+
+        info!("Woke {} tasks", woken);
     }
 
     pub fn subscribe(&self, waker: Waker) {
