@@ -130,7 +130,7 @@ impl<T> ReadReleaseLock<T> {
     }
 
     pub fn release(&self) {
-        debug_assert!(self.readers.load(Ordering::Acquire) == 0);
+        assert!(self.readers.load(Ordering::Acquire) == 0);
         self.state.store(State::Empty, Ordering::Release);
         self.on_release.notify();
         // loop {

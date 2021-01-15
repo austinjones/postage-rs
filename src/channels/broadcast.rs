@@ -712,7 +712,7 @@ mod tests {
 mod tokio_tests {
     use std::time::Duration;
 
-    use log::info;
+    use log::{info, LevelFilter};
     use simple_logger::SimpleLogger;
     use tokio::{
         task::{spawn, JoinHandle},
@@ -726,6 +726,10 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn simple() {
+        // SimpleLogger::new()
+        //     .with_level(LevelFilter::Warn)
+        //     .init()
+        //     .unwrap();
         let (mut tx, mut rx) = super::channel(2);
 
         spawn(async move {

@@ -78,62 +78,40 @@ impl<T> MpmcCircularBuffer<T> {
 
     pub fn try_write(&self, value: T, cx: &Context<'_>) -> TryWrite<T> {
         loop {
-            if let Err(e) =
+            if let Ok(_e) =
                 self.head_lock
                     .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
             {
-                continue;
+                break;
             }
+        }
 
-            let head_id = self.head.load(Ordering::SeqCst);
-            let next_id = head_id + 1;
-            let head_slot = self.get_slot(head_id);
+        let head_id = self.head.load(Ordering::SeqCst);
+        let next_id = head_id + 1;
+        let head_slot = self.get_slot(head_id);
 
-            // if head_id == self.tail.load(Ordering::Acquire) {
-            //     info!("Write {} pending, slot is tail: {:?}", head_id, head_slot);
-            //     return TryWrite::Pending(value);
-            // }
+        match head_slot.try_write(value, cx, || {
+            self.head.store(next_id, Ordering::SeqCst);
+            self.head_lock.store(false, Ordering::Release);
+        }) {
+            rr_lock::TryWrite::Ready => {
+                info!("Write {} complete: {:?}", head_id, head_slot);
 
-            // info!("TryWrite {}: {:?}", head_id, head_slot);
-
-            match head_slot.try_write(value, cx, || {
-                self.head.store(next_id, Ordering::SeqCst);
+                return TryWrite::Ready;
+            }
+            rr_lock::TryWrite::Pending(v) => {
                 self.head_lock.store(false, Ordering::Release);
-                // match self.head.compare_exchange(
-                //     head_id,
-                //     next_id,
-                //     Ordering::SeqCst,
-                //     Ordering::Relaxed,
-                // ) {
-                //     Ok(_) => break,
-                //     Err(err) => {
-                //         warn!("Head compare failure.  Expected {}, found {}", head_id, err);
-                //         if err >= next_id {
-                //             break;
-                //         }
-                //     }
-                // }
-            }) {
-                rr_lock::TryWrite::Ready => {
-                    info!("Write {} complete: {:?}", head_id, head_slot);
 
-                    return TryWrite::Ready;
-                }
-                rr_lock::TryWrite::Pending(v) => {
-                    self.head_lock.store(false, Ordering::Release);
-
-                    info!(
-                        "Write {} pending, slot is reading: {:?}",
-                        head_id, head_slot
-                    );
-                    return TryWrite::Pending(v);
-                }
+                info!(
+                    "Write {} pending, slot is reading: {:?}",
+                    head_id, head_slot
+                );
+                return TryWrite::Pending(v);
             }
         }
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        // TODO: examine for race conditions/consistency
         let index = loop {
             let index = self.head.load(Ordering::SeqCst);
             let slot = self.get_slot(index);
@@ -206,28 +184,26 @@ impl BufferReader {
             ReaderState::Reading => {}
         }
 
-        loop {
-            let index = self.index.load(Ordering::Acquire);
-            let slot = buffer.get_slot(index);
+        let index = self.index.load(Ordering::Acquire);
+        let slot = buffer.get_slot(index);
 
-            // info!("TryRead {}, slot: {:?}", index, slot);
+        // info!("TryRead {}, slot: {:?}", index, slot);
 
-            match slot.try_read(cx) {
-                rr_lock::TryRead::NotLocked => {
-                    panic!("MPMC slot {} not locked! {:?}", index, slot);
-                }
-                rr_lock::TryRead::Read(value) => {
-                    self.advance(index, buffer, cx);
-                    self.release(index, buffer);
+        match slot.try_read(cx) {
+            rr_lock::TryRead::NotLocked => {
+                panic!("MPMC slot {} not locked! {:?}", index, slot);
+            }
+            rr_lock::TryRead::Read(value) => {
+                self.advance(index, buffer, cx);
+                self.release(index, buffer);
 
-                    info!("Read {} complete, slot: {:?}", index, slot);
+                info!("Read {} complete, slot: {:?}", index, slot);
 
-                    return TryRead::Ready(value);
-                }
-                rr_lock::TryRead::Pending => {
-                    info!("Read {} pending, slot: {:?}", index, slot);
-                    return TryRead::Pending;
-                }
+                return TryRead::Ready(value);
+            }
+            rr_lock::TryRead::Pending => {
+                info!("Read {} pending, slot: {:?}", index, slot);
+                return TryRead::Pending;
             }
         }
     }
@@ -269,11 +245,22 @@ impl BufferReader {
         let next_id = id + 1;
         let next_slot = buffer.get_slot(next_id);
 
-        // loop {
+        loop {
+            if let Ok(_e) =
+                buffer
+                    .head_lock
+                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                break;
+            }
+        }
+
         let head_id = buffer.head.load(Ordering::Acquire);
 
         if next_id >= head_id {
             next_slot.acquire_next();
+            buffer.head_lock.store(false, Ordering::Release);
+
             // if head_id != buffer.head.load(Ordering::Acquire) {
             //     next_slot.decrement_next();
             //     continue;
@@ -281,9 +268,10 @@ impl BufferReader {
 
             self.state.store(ReaderState::Blocked, Ordering::Release);
             slot.subscribe_write(cx);
-            info!("Reader blocked at slot {}, head is {}", next_id, head_id);
+            warn!("Reader blocked at slot {}, head is {}", next_id, head_id);
         } else {
             buffer.get_slot(next_id).acquire();
+            buffer.head_lock.store(false, Ordering::Release);
         }
         // }
 
