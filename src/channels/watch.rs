@@ -368,10 +368,10 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
-    use tokio::spawn;
+    use tokio::{spawn, time::timeout};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS},
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -388,10 +388,14 @@ mod tokio_tests {
             }
         });
 
-        let mut channel = Channel::new(0).allow_skips();
-        while let Some(message) = rx.recv().await {
-            channel.assert_message(&message);
-        }
+        timeout(TEST_TIMEOUT, async move {
+            let mut channel = Channel::new(0).allow_skips();
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        })
+        .await
+        .expect("test timeout");
     }
 
     #[tokio::test]
@@ -418,18 +422,22 @@ mod tokio_tests {
             })
         });
 
-        for handle in handles {
-            handle.await.expect("join failed");
-        }
+        timeout(TEST_TIMEOUT, async move {
+            for handle in handles {
+                handle.await.expect("join failed");
+            }
+        })
+        .await
+        .expect("test timeout");
     }
 }
 
 #[cfg(test)]
 mod async_std_tests {
-    use async_std::task::spawn;
+    use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS},
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -446,11 +454,14 @@ mod async_std_tests {
             }
         });
 
-        let mut channel = Channel::new(0).allow_skips();
-        while let Some(message) = rx.recv().await {
-            // println!("{:?}", message);
-            channel.assert_message(&message);
-        }
+        timeout(TEST_TIMEOUT, async move {
+            let mut channel = Channel::new(0).allow_skips();
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        })
+        .await
+        .expect("test timeout");
     }
 
     #[tokio::test]
@@ -477,8 +488,12 @@ mod async_std_tests {
             })
         });
 
-        for handle in handles {
-            handle.await;
-        }
+        timeout(TEST_TIMEOUT, async move {
+            for handle in handles {
+                handle.await;
+            }
+        })
+        .await
+        .expect("test timeout");
     }
 }

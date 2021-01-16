@@ -187,9 +187,9 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
-    use tokio::task::spawn;
+    use tokio::{task::spawn, time::timeout};
 
-    use crate::{Sink, Stream};
+    use crate::{test::TEST_TIMEOUT, Sink, Stream};
 
     use super::channel;
 
@@ -199,15 +199,19 @@ mod tokio_tests {
 
         spawn(async move { tx.send(100usize).await });
 
-        assert_eq!(Some(100usize), rx.recv().await);
+        let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
+            .await
+            .expect("test timeout");
+
+        assert_eq!(Some(100usize), msg);
     }
 }
 
 #[cfg(test)]
 mod async_std_tests {
-    use async_std::task::spawn;
+    use async_std::{future::timeout, task::spawn};
 
-    use crate::{Sink, Stream};
+    use crate::{test::TEST_TIMEOUT, Sink, Stream};
 
     use super::channel;
 
@@ -217,6 +221,10 @@ mod async_std_tests {
 
         spawn(async move { tx.send(100usize).await });
 
-        assert_eq!(Some(100usize), rx.recv().await);
+        let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
+            .await
+            .expect("test timeout");
+
+        assert_eq!(Some(100usize), msg);
     }
 }

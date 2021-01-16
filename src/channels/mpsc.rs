@@ -356,10 +356,10 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
-    use tokio::task::spawn;
+    use tokio::{task::spawn, time::timeout};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS},
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -373,11 +373,18 @@ mod tokio_tests {
             }
         });
 
-        let mut channel = Channel::new(0);
-        while let Some(message) = rx.recv().await {
-            channel.assert_message(&message);
-        }
-        join.await.expect("Join failed");
+        let rx_handle = spawn(async move {
+            let mut channel = Channel::new(0);
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+            join.await.expect("Join failed");
+        });
+
+        timeout(TEST_TIMEOUT, rx_handle)
+            .await
+            .expect("test timeout")
+            .expect("join error");
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -395,19 +402,26 @@ mod tokio_tests {
 
         drop(tx);
 
-        let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
-        while let Some(message) = rx.recv().await {
-            channels.assert_message(&message);
-        }
+        let rx_handle = spawn(async move {
+            let mut channel = Channel::new(0);
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        });
+
+        timeout(TEST_TIMEOUT, rx_handle)
+            .await
+            .expect("test timeout")
+            .expect("join error");
     }
 }
 
 #[cfg(test)]
 mod async_std_tests {
-    use async_std::task::spawn;
+    use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS},
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -421,10 +435,16 @@ mod async_std_tests {
             }
         });
 
-        let mut channel = Channel::new(0);
-        while let Some(message) = rx.recv().await {
-            channel.assert_message(&message);
-        }
+        let rx_handle = spawn(async move {
+            let mut channel = Channel::new(0);
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        });
+
+        timeout(TEST_TIMEOUT, rx_handle)
+            .await
+            .expect("test timeout");
     }
 
     #[async_std::test]
@@ -442,9 +462,15 @@ mod async_std_tests {
 
         drop(tx);
 
-        let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
-        while let Some(message) = rx.recv().await {
-            channels.assert_message(&message);
-        }
+        let rx_handle = spawn(async move {
+            let mut channel = Channel::new(0);
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        });
+
+        timeout(TEST_TIMEOUT, rx_handle)
+            .await
+            .expect("test timeout");
     }
 }

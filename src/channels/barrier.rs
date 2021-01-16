@@ -290,7 +290,10 @@ mod async_std_tests {
 
     use async_std::{future::timeout, task::spawn};
 
-    use crate::{test::CHANNEL_TEST_RECEIVERS, Sink, Stream};
+    use crate::{
+        test::{CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
+        Sink, Stream,
+    };
 
     use super::Receiver;
 
@@ -306,7 +309,11 @@ mod async_std_tests {
 
         tx.send(()).await.expect("Should send message");
 
-        assert_rx(rx).await;
+        timeout(TEST_TIMEOUT, async move {
+            assert_rx(rx).await;
+        })
+        .await
+        .expect("test timeout");
     }
 
     #[async_std::test]
@@ -315,7 +322,11 @@ mod async_std_tests {
 
         drop(tx);
 
-        assert_rx(rx).await;
+        timeout(TEST_TIMEOUT, async move {
+            assert_rx(rx).await;
+        })
+        .await
+        .expect("test timeout");
     }
 
     #[async_std::test]
@@ -332,8 +343,12 @@ mod async_std_tests {
 
         drop(tx);
 
-        for handle in handles {
-            handle.await;
-        }
+        timeout(TEST_TIMEOUT, async move {
+            for handle in handles {
+                handle.await;
+            }
+        })
+        .await
+        .expect("test timeout");
     }
 }
