@@ -18,5 +18,35 @@ jobs:
           profile: minimal
           override: true
 
+      - id: cargo-cache
+        name: cache
+        uses: austinjones/rust-cache@v1
+        with:
+          key: release
+
+      - uses: actions-rs/cargo@v1
+        name: cargo test --all-features
+        with:
+          command: test
+          args: --all-features
+
+      - uses: actions-rs/cargo@v1
+        name: cargo test --no-default-features
+        with:
+          command: test
+          args: --no-default-features
+
+      - uses: actions-rs/cargo@v1
+        name: cargo test --release --all-features
+        with:
+          command: test
+          args: --release --all-features
+
+      - uses: actions-rs/cargo@v1
+        name: cargo test --release --no-default-features
+        with:
+          command: test
+          args: --release --no-default-features
+
       - name: cargo publish
         run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
