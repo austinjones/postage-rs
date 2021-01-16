@@ -128,6 +128,8 @@ pub enum PollSend<T> {
     Rejected(T),
 }
 
+/// A future returned by `Sink::send`, which wraps an item.
+/// The item is sent to the sink, or returned if the sink is closed.
 #[pin_project]
 #[must_use = "futures do nothing unless polled"]
 pub struct SendFuture<'s, S>

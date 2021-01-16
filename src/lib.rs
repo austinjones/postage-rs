@@ -1,6 +1,6 @@
 //! The feature-rich, portable async channel library.
 //!
-//!
+//! Provides a set of async channels that can be used with any async executor.
 mod channels;
 mod sink;
 mod stream;

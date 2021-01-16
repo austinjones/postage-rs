@@ -1,3 +1,4 @@
+/// An error type returned by `Sink::try_send`, when the sink is full, or is closed.
 #[derive(Debug)]
 pub enum TrySendError<T> {
     /// The sink could accept the item at a later time
@@ -19,6 +20,7 @@ where
 
 impl<T> std::error::Error for TrySendError<T> where T: std::fmt::Debug {}
 
+/// An error type returned by `Sink::send`, if the sink is closed while a send is in progress.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SendError<T>(pub T);
 

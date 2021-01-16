@@ -167,6 +167,7 @@ pub enum PollRecv<T> {
     Closed,
 }
 
+/// A future returned by `Stream::recv`.
 #[pin_project]
 #[must_use = "futures do nothing unless polled"]
 pub struct RecvFuture<'s, S>
