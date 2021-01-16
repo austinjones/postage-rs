@@ -1,4 +1,4 @@
-pub const CHANNEL_TEST_ITERATIONS: usize = 25000;
+pub const CHANNEL_TEST_ITERATIONS: usize = 5000;
 pub const CHANNEL_TEST_SENDERS: usize = 10;
 pub const CHANNEL_TEST_RECEIVERS: usize = 10;
 

@@ -129,38 +129,14 @@ impl<T> ReadReleaseLock<T> {
         self.readers.decrement()
     }
 
-    pub fn release(&self) {
-        assert!(self.readers.load(Ordering::Acquire) == 0);
+    pub fn release(&self) -> TryDecrement {
+        if self.readers.load(Ordering::Acquire) > 0 {
+            return TryDecrement::Alive;
+        }
+
         self.state.store(State::Empty, Ordering::Release);
         self.on_release.notify();
-        // loop {
-        //     match self.state.load(Ordering::Acquire) {
-        //         State::Empty | State::Writing => {
-        //             return self.readers.decrement();
-        //         }
-        //         State::Reading => {
-        //             let decrement = self.readers.decrement();
-
-        //             match decrement {
-        //                 TryDecrement::Alive => return decrement,
-        //                 TryDecrement::Dead => {}
-        //             }
-
-        //             if let Err(e) = self.state.compare_exchange(
-        //                 State::Reading,
-        //                 State::Empty,
-        //                 Ordering::AcqRel,
-        //                 Ordering::Relaxed,
-        //             ) {
-        //                 continue;
-        //             }
-
-        //             self.on_release.notify();
-
-        //             return decrement;
-        //         }
-        //     }
-        // }
+        TryDecrement::Dead
     }
 }
 

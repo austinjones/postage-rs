@@ -68,21 +68,47 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
-        let stored_generation = self.shared.extension().generation(Ordering::Acquire);
-        if self.generation.load(std::sync::atomic::Ordering::SeqCst) > stored_generation {
-            if self.shared.is_closed() {
-                return PollRecv::Closed;
-            }
+        match self.try_recv_internal() {
+            TryRecv::Pending => {
+                if self.shared.is_closed() {
+                    return PollRecv::Closed;
+                }
 
-            self.shared.subscribe_send(cx.waker().clone());
-            return PollRecv::Pending;
+                self.shared.subscribe_send(cx.waker().clone());
+
+                match self.try_recv_internal() {
+                    TryRecv::Pending => PollRecv::Pending,
+                    TryRecv::Ready(v) => PollRecv::Ready(v),
+                }
+            }
+            TryRecv::Ready(v) => PollRecv::Ready(v),
+        }
+    }
+}
+
+impl<T> Receiver<T>
+where
+    T: Clone,
+{
+    fn try_recv_internal(&self) -> TryRecv<T> {
+        let state = self.shared.extension();
+        if self.generation.load(std::sync::atomic::Ordering::SeqCst)
+            > state.generation(Ordering::SeqCst)
+        {
+            return TryRecv::Pending;
         }
 
+        let borrow = self.shared.extension().value.read().unwrap();
+        let stored_generation = self.shared.extension().generation(Ordering::SeqCst);
         self.generation
             .store(stored_generation + 1, Ordering::Release);
-        let borrow = self.shared.extension().value.read().unwrap();
-        PollRecv::Ready(borrow.clone())
+        TryRecv::Ready(borrow.clone())
     }
+}
+
+enum TryRecv<T> {
+    Pending,
+    Ready(T),
 }
 
 impl<T> Clone for Receiver<T> {
@@ -422,6 +448,7 @@ mod async_std_tests {
 
         let mut channel = Channel::new(0).allow_skips();
         while let Some(message) = rx.recv().await {
+            // println!("{:?}", message);
             channel.assert_message(&message);
         }
     }

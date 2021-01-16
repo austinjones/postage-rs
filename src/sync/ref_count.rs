@@ -10,6 +10,14 @@ pub enum TryDecrement {
     Dead,
 }
 
+impl TryDecrement {
+    pub fn expect_dead(&self, message: &str) {
+        if let Self::Alive = self {
+            panic!("TryDecrement unwrapped on an Alive value: {}", message);
+        }
+    }
+}
+
 impl RefCount {
     pub fn new(count: usize) -> Self {
         Self {

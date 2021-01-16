@@ -121,7 +121,7 @@ impl<T> MpmcCircularBuffer<T> {
                 break index;
             }
 
-            slot.release();
+            slot.decrement();
         };
 
         BufferReader {
@@ -217,7 +217,7 @@ impl BufferReader {
             slot.acquire();
 
             if index != self.index.load(Ordering::Acquire) {
-                slot.release();
+                slot.decrement();
                 continue;
             }
 
@@ -268,7 +268,7 @@ impl BufferReader {
 
             self.state.store(ReaderState::Blocked, Ordering::Release);
             slot.subscribe_write(cx);
-            warn!("Reader blocked at slot {}, head is {}", next_id, head_id);
+            info!("Reader blocked at slot {}, head is {}", next_id, head_id);
         } else {
             buffer.get_slot(next_id).acquire();
             buffer.head_lock.store(false, Ordering::Release);
@@ -290,7 +290,8 @@ impl BufferReader {
             TryDecrement::Dead => {
                 let tail = buffer.tail.load(Ordering::Acquire);
                 if id == tail {
-                    slot.release();
+                    slot.release()
+                        .expect_dead("reader added to tail slot after slot became dead");
 
                     buffer.tail.store(tail + 1, Ordering::Release);
 
