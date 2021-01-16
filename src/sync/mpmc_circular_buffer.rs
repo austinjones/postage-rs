@@ -7,7 +7,7 @@ use atomic::{Atomic, Ordering};
 use std::task::Context;
 
 use super::{
-    ref_count::{TryDecrement},
+    ref_count::TryDecrement,
     rr_lock::{self, ReadReleaseLock},
 };
 use std::fmt::Debug;

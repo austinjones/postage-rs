@@ -359,7 +359,7 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{Channel, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -421,7 +421,7 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{Channel, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
