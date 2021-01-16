@@ -300,8 +300,13 @@ impl BufferReader {
             TryDecrement::Dead => {
                 let tail = buffer.tail.load(Ordering::Acquire);
                 if id == tail {
-                    slot.release()
-                        .expect_dead("reader added to tail slot after slot became dead");
+                    match slot.release() {
+                        TryDecrement::Alive => {
+                            return;
+                        }
+                        TryDecrement::Dead => {}
+                    }
+                    // .expect_dead("reader added to tail slot after slot became dead");
 
                     buffer.tail.store(tail + 1, Ordering::Release);
 

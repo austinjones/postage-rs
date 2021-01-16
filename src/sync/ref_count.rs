@@ -11,6 +11,7 @@ pub enum TryDecrement {
 }
 
 impl TryDecrement {
+    #[allow(dead_code)]
     #[track_caller]
     pub fn expect_dead(&self, message: &str) {
         if let Self::Alive = self {
