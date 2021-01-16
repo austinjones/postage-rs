@@ -292,10 +292,7 @@ impl BufferReader {
                 if id == tail {
                     slot.release();
 
-                    buffer
-                        .tail
-                        .compare_exchange(id, id + 1, Ordering::AcqRel, Ordering::Relaxed)
-                        .unwrap();
+                    buffer.tail.store(tail + 1, Ordering::Release);
 
                     info!(
                         "Read {} released, tail incremented from {} to {}",
