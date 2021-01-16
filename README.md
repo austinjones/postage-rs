@@ -20,7 +20,7 @@ Why use Postage?
 Postage includes a fixed-capacity multi-producer, single-consumer channel.  The producer can be cloned, and the sender task is suspended if the channel becomes full.
 
 ### postage::broadcast
-The broadcast channel provides multi-sender, multi-receiver message dispatch.  All receivers are send every message.  The channel has a fixed capacity, and senders are suspended if the buffer is filled.
+The broadcast channel provides multi-sender, multi-receiver message dispatch.  All receivers are sent every message.  The channel has a fixed capacity, and senders are suspended if the buffer is filled.
 
 When a receiver is cloned, both receivers will be sent the same series of messages.
 
