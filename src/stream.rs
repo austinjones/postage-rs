@@ -22,12 +22,20 @@ mod stream_log;
 
 pub use errors::*;
 
+/// An asynchronous stream, which produces a series of messages until closed.
 #[must_use = "streams do nothing unless polled"]
 pub trait Stream {
     type Item;
 
+    /// Attempts to retrieve an item from the stream, without blocking.
+    /// Returns `PollRecv::Ready(value)` if a message is ready
+    /// Returns `PollRecv::Pending` if the stream is open, but no message is currently available.
+    /// Returns `PollRecv::Closed` if the stream is closed, and no messages are expected.
     fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item>;
 
+    /// Retrieves a message from the stream.
+    /// Resolves to `Some(value)` if the stream is open
+    /// Resolves to `None` if the stream is closed, and no further messages are expected.
     fn recv(&mut self) -> RecvFuture<'_, Self>
     where
         Self: Unpin,
@@ -35,6 +43,10 @@ pub trait Stream {
         RecvFuture::new(self)
     }
 
+    /// Attempts to retrive a message from the stream, without blocking.
+    /// Returns `Ok(value)` if a message was ready.
+    /// Returns `TryRecvError::Pending` if the stream was open, but no messages were available.
+    /// Returns `TryRecvError::Rejected` if the stream has been closed.
     fn try_recv(&mut self) -> Result<Self::Item, TryRecvError>
     where
         Self: Unpin,
@@ -50,10 +62,12 @@ pub trait Stream {
         }
     }
 
+    /// Returns a stream which produces a single value, and then is closed.
     fn once(item: Self::Item) -> OnceStream<Self::Item> {
         OnceStream::new(item)
     }
 
+    /// Returns a stream which infiniately produces a clonable value.
     fn repeat(item: Self::Item) -> RepeatStream<Self::Item>
     where
         Self::Item: Clone,
@@ -61,6 +75,7 @@ pub trait Stream {
         RepeatStream::new(item)
     }
 
+    /// Transforms the stream with a map function.
     fn map<Map, Into>(self, map: Map) -> MapStream<Self, Map, Into>
     where
         Map: Fn(Self::Item) -> Into,
@@ -69,6 +84,7 @@ pub trait Stream {
         MapStream::new(self, map)
     }
 
+    /// Filters messages returned by the stream, forwarding any to `.recv().await` where filter returns true.
     fn filter<Filter>(self, filter: Filter) -> FilterStream<Self, Filter>
     where
         Self: Sized + Unpin,
@@ -77,6 +93,7 @@ pub trait Stream {
         FilterStream::new(self, filter)
     }
 
+    /// Merges two streams, returning values from both at once, until both are closed.
     fn merge<Other>(self, other: Other) -> MergeStream<Self, Other>
     where
         Other: Stream<Item = Self::Item>,
@@ -85,6 +102,7 @@ pub trait Stream {
         MergeStream::new(self, other)
     }
 
+    /// Chains two streams, returning values from this until it is closed, and then returning values from other.
     fn chain<Other>(self, other: Other) -> ChainStream<Self, Other>
     where
         Other: Stream<Item = Self::Item>,
@@ -93,6 +111,7 @@ pub trait Stream {
         ChainStream::new(self, other)
     }
 
+    /// Finds a message matching a condition.  When the condition is matched, a single value will be returned.
     fn find<Condition>(self, condition: Condition) -> FindStream<Self, Condition>
     where
         Self: Sized + Unpin,
@@ -101,6 +120,9 @@ pub trait Stream {
         FindStream::new(self, condition)
     }
 
+    /// Logs messages that are produced by the stream using the Debug trait, at the provided log level.
+    ///
+    /// Requires the `logging` feature
     #[cfg(feature = "logging")]
     fn log(self, level: log::Level) -> stream_log::StreamLog<Self>
     where
@@ -134,6 +156,7 @@ where
     }
 }
 
+/// An enum of poll responses that are produced by Stream implementations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollRecv<T> {
     /// An item is ready

@@ -1,3 +1,9 @@
+//! Watch channels can be used to asynchronously transmit state.  
+//! When receivers are created, they immediately recieve an initial value.  
+//! They will also recieve new values, but are not guaranteed to recieve *every* value.
+//!
+//! Values transmitted over watch channels must implement Default.  A simple way to achieve this is to transmit `Option<T>`.
+
 use std::{
     ops::Deref,
     sync::{
@@ -13,6 +19,7 @@ use crate::{
     PollRecv, PollSend, Sink, Stream,
 };
 
+/// Constructs a new watch channel pair, filled with T::default()
 pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
     let (tx_shared, rx_shared) = shared(StateExtension::new(T::default()));
     let sender = Sender { shared: tx_shared };
@@ -25,6 +32,7 @@ pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
+/// The sender half of a watch channel.  The stored value can be updated with the postage::Sink trait.
 pub struct Sender<T> {
     pub(in crate::channels::watch) shared: SenderShared<StateExtension<T>>,
 }
@@ -51,6 +59,9 @@ impl<T> Sink for Sender<T> {
     }
 }
 
+/// The receiver half of a watch channel.  Can recieve state updates with the postage::Sink trait.
+///
+/// The reciever will be woken when new values arive, but is not guaranteed to recieve every message.
 pub struct Receiver<T> {
     pub(in crate::channels::watch) shared: ReceiverShared<StateExtension<T>>,
     pub(in crate::channels::watch) generation: AtomicUsize,

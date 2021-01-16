@@ -1,3 +1,5 @@
+//! Oneshot channels transmit a single value between a sender and a reciever.  
+//! Neither can be cloned.  If the sender drops, the receiver recieves a `None` value.
 use std::sync::Arc;
 
 use static_assertions::{assert_impl_all, assert_not_impl_all};
@@ -15,6 +17,7 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
+/// The sender half of a oneshot channel.  Can transmit a single message with the postage::Sink trait.
 pub struct Sender<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
@@ -43,6 +46,7 @@ impl<T> Drop for Sender<T> {
     }
 }
 
+/// The receiver half of a oneshot channel.  Can recieve a single message (or none if the sender drops) with the postage::Stream trait.
 pub struct Receiver<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }

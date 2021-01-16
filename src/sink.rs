@@ -13,19 +13,31 @@ mod sink_log;
 
 pub use errors::*;
 
+/// A sink which can asynchronously accept messages, and at some point may refuse to accept any further messages.
 pub trait Sink {
     type Item;
 
+    /// Attempts to accept the message, without blocking.  
+    /// Returns PollSend::Ready, PollSend::Pending(value), or PollSend::Rejected(value)
     fn poll_send(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item>;
 
+    /// Attempts to send a message into the sink.  
+    ///
+    /// Returns `Ok(())` if the value was accepted.
+    /// Returns `Err(SendError(value))` if the sink rejected the message.
     fn send(&mut self, value: Self::Item) -> SendFuture<Self> {
         SendFuture::new(self, value)
     }
 
+    /// Attempts to send a message over the sink, without blocking.
+    ///
+    /// Returns `Ok(())` if the value was accepted.
+    /// Returns `Err(TrySendError::Pending(value))` if the send would have blocked
+    /// Returns `Err(TrySendError::Rejected(value))` if the value was rejected
     fn try_send(&mut self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
     where
         Self: Unpin,
@@ -42,6 +54,8 @@ pub trait Sink {
         }
     }
 
+    /// Chains two sink implementations.  Messages will be transmitted to the argument until it rejects a message
+    /// Then messages will be transmitted to self.
     fn after<Before>(self, before: Before) -> chain::SinkChain<Before, Self>
     where
         Before: Sink<Item = Self::Item>,
@@ -50,6 +64,7 @@ pub trait Sink {
         chain::SinkChain::new(before, self)
     }
 
+    /// Filters messages, forwarding them to the sink if the filter returns true
     fn filter<Filter>(self, filter: Filter) -> filter::SinkFilter<Filter, Self>
     where
         Filter: FnMut(&Self::Item) -> bool,
@@ -58,6 +73,9 @@ pub trait Sink {
         filter::SinkFilter::new(filter, self)
     }
 
+    /// Logs messages that are accepted by the sink using the Debug trait, at the provided log level.
+    ///
+    /// Requires the `logging` feature
     #[cfg(feature = "logging")]
     fn log(self, level: log::Level) -> sink_log::SinkLog<Self>
     where
@@ -99,6 +117,7 @@ where
     }
 }
 
+/// An enum of poll responses that are produced by Sink implementations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollSend<T> {
     /// The item was accepted and sent

@@ -1,3 +1,10 @@
+//! The broadcast channel provides multi-sender, multi-receiver message dispatch. All receivers are sent every message.
+//! The channel has a fixed capacity, and senders are suspended if the buffer is filled.
+//!
+//! When a receiver is cloned, both receivers will be sent the same series of messages.
+//!
+//! Senders also provide a subscribe() method which adds a receiver on the oldest value.
+
 use static_assertions::assert_impl_all;
 
 use crate::{
@@ -8,7 +15,7 @@ use crate::{
     PollRecv, PollSend, Sink, Stream,
 };
 
-// bounded mpmc with backpressure
+/// Constructs a pair of broadcast endpoints, with a fixed-size buffer of the given capacity
 pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     // we add one spare capacity so that receivers have an empty slot to wait on
     let (buffer, reader) = MpmcCircularBuffer::new(capacity);
@@ -21,6 +28,9 @@ pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
+/// A broadcast sender that can be used with the postage::Sink trait.  Can be cloned.
+///
+/// The sender task is suspended when the internal buffer is filled.
 pub struct Sender<T> {
     pub(in crate::channels::broadcast) shared: SenderShared<MpmcCircularBuffer<T>>,
 }
@@ -64,6 +74,7 @@ where
 }
 
 impl<T> Sender<T> {
+    /// Subscribes to the channel, creating a new receiver that starts on the oldest message.
     pub fn subscribe(&self) -> Receiver<T> {
         let shared = self.shared.clone_receiver();
         let reader = shared.extension().new_reader();
@@ -72,6 +83,9 @@ impl<T> Sender<T> {
     }
 }
 
+/// A broadcast receiver that can be used with the postage::Stream trait.
+///
+/// When cloned, the new receiver will begin processing messages at the same location as the original.
 pub struct Receiver<T> {
     shared: ReceiverShared<MpmcCircularBuffer<T>>,
     reader: BufferReader,

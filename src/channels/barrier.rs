@@ -1,3 +1,7 @@
+//! Barrier channels can be used to synchronize events, but do not transmit any data.  
+//! When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  
+//! This can be used to asynchronously coordinate actions between tasks.
+
 use std::sync::Arc;
 
 use atomic::{Atomic, Ordering};
@@ -5,6 +9,7 @@ use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{sync::notifier::Notifier, PollRecv, PollSend, Sink, Stream};
 
+/// Constructs a pair of barrier endpoints
 pub fn channel() -> (Sender, Receiver) {
     let shared = Arc::new(Shared {
         state: Atomic::new(State::Pending),
@@ -20,6 +25,9 @@ pub fn channel() -> (Sender, Receiver) {
     (sender, receiver)
 }
 
+/// The sender half of a barrier channel.  Dropping the sender transmits to the receiver.
+///
+/// Can also be triggered by sending `()` with the postage::Sink trait.
 pub struct Sender {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
@@ -51,6 +59,7 @@ impl Drop for Sender {
     }
 }
 
+/// A barrier reciever.  Can be used with the postage::Stream trait to return a `()` value when the Sender is dropped.
 #[derive(Clone)]
 pub struct Receiver {
     pub(in crate::channels::barrier) shared: Arc<Shared>,

@@ -1,3 +1,6 @@
+//! The feature-rich, portable async channel library.
+//!
+//!
 mod channels;
 mod sink;
 mod stream;

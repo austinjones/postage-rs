@@ -1,3 +1,6 @@
+//! A fixed-capacity multi-producer, single-consumer channel.  
+//! The producer can be cloned, and the sender task is suspended if the channel becomes full.
+
 use crossbeam_queue::ArrayQueue;
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
@@ -15,6 +18,9 @@ pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
+/// The sender half of an mpsc channel.  Can send messages with the postage::Sink trait.
+///
+/// Can be cloned.
 pub struct Sender<T> {
     pub(in crate::channels::mpsc) shared: SenderShared<StateExtension<T>>,
 }
@@ -60,6 +66,9 @@ impl<T> Sink for Sender<T> {
     }
 }
 
+/// The receiver half of an mpsc channel.  Cannot be cloned.
+///
+/// Can receive messages with the postage::Stream trait.
 pub struct Receiver<T> {
     pub(in crate::channels::mpsc) shared: ReceiverShared<StateExtension<T>>,
 }
