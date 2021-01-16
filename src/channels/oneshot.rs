@@ -189,21 +189,26 @@ mod tests {
 mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
-    use crate::{test::TEST_TIMEOUT, Sink, Stream};
+    use crate::{
+        test::{CHANNEL_TEST_ITERATIONS, TEST_TIMEOUT},
+        Sink, Stream,
+    };
 
     use super::channel;
 
     #[tokio::test]
     async fn simple() {
-        let (mut tx, mut rx) = channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (mut tx, mut rx) = channel();
 
-        spawn(async move { tx.send(100usize).await });
+            spawn(async move { tx.send(100usize).await });
 
-        let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
-            .await
-            .expect("test timeout");
+            let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
+                .await
+                .expect("test timeout");
 
-        assert_eq!(Some(100usize), msg);
+            assert_eq!(Some(100usize), msg);
+        }
     }
 }
 
@@ -211,20 +216,25 @@ mod tokio_tests {
 mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
-    use crate::{test::TEST_TIMEOUT, Sink, Stream};
+    use crate::{
+        test::{CHANNEL_TEST_ITERATIONS, TEST_TIMEOUT},
+        Sink, Stream,
+    };
 
     use super::channel;
 
     #[async_std::test]
     async fn simple() {
-        let (mut tx, mut rx) = channel();
+        for i in 0..CHANNEL_TEST_ITERATIONS {
+            let (mut tx, mut rx) = channel();
 
-        spawn(async move { tx.send(100usize).await });
+            spawn(async move { tx.send(i).await });
 
-        let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
-            .await
-            .expect("test timeout");
+            let msg = timeout(TEST_TIMEOUT, async move { rx.recv().await })
+                .await
+                .expect("test timeout");
 
-        assert_eq!(Some(100usize), msg);
+            assert_eq!(Some(i), msg);
+        }
     }
 }

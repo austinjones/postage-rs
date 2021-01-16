@@ -236,7 +236,10 @@ mod tokio_tests {
 
     use tokio::{task::spawn, time::timeout};
 
-    use crate::{test::CHANNEL_TEST_RECEIVERS, Sink, Stream};
+    use crate::{
+        test::{CHANNEL_TEST_ITERATIONS, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
+        Sink, Stream,
+    };
 
     use super::Receiver;
 
@@ -248,38 +251,51 @@ mod tokio_tests {
 
     #[tokio::test]
     async fn simple() {
-        let (mut tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (mut tx, rx) = super::channel();
 
-        tx.send(()).await.expect("Should send message");
+            tx.send(()).await.expect("Should send message");
 
-        assert_rx(rx).await;
+            assert_rx(rx).await;
+        }
     }
 
     #[tokio::test]
     async fn simple_drop() {
-        let (tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, rx) = super::channel();
 
-        drop(tx);
+            drop(tx);
 
-        assert_rx(rx).await;
+            assert_rx(rx).await;
+        }
     }
 
     #[tokio::test]
     async fn multi_receiver() {
-        let (tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, rx) = super::channel();
 
-        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
-            let rx2 = rx.clone();
+            let handles = (0..CHANNEL_TEST_RECEIVERS).map(move |_| {
+                let rx2 = rx.clone();
 
-            spawn(async move {
-                assert_rx(rx2).await;
-            })
-        });
+                spawn(async move {
+                    assert_rx(rx2).await;
+                })
+            });
 
-        drop(tx);
+            drop(tx);
 
-        for handle in handles {
-            handle.await.expect("Assertion failure");
+            let rx_handle = spawn(async move {
+                for handle in handles {
+                    handle.await.expect("Assertion failure");
+                }
+            });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout")
+                .expect("join error");
         }
     }
 }
@@ -291,7 +307,7 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
+        test::{CHANNEL_TEST_ITERATIONS, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -305,50 +321,56 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn simple() {
-        let (mut tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (mut tx, rx) = super::channel();
 
-        tx.send(()).await.expect("Should send message");
+            tx.send(()).await.expect("Should send message");
 
-        timeout(TEST_TIMEOUT, async move {
-            assert_rx(rx).await;
-        })
-        .await
-        .expect("test timeout");
+            timeout(TEST_TIMEOUT, async move {
+                assert_rx(rx).await;
+            })
+            .await
+            .expect("test timeout");
+        }
     }
 
     #[async_std::test]
     async fn simple_drop() {
-        let (tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, rx) = super::channel();
 
-        drop(tx);
+            drop(tx);
 
-        timeout(TEST_TIMEOUT, async move {
-            assert_rx(rx).await;
-        })
-        .await
-        .expect("test timeout");
+            timeout(TEST_TIMEOUT, async move {
+                assert_rx(rx).await;
+            })
+            .await
+            .expect("test timeout");
+        }
     }
 
     #[async_std::test]
     async fn multi_receiver() {
-        let (tx, rx) = super::channel();
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, rx) = super::channel();
 
-        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
-            let rx2 = rx.clone();
+            let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
+                let rx2 = rx.clone();
 
-            spawn(async move {
-                assert_rx(rx2).await;
+                spawn(async move {
+                    assert_rx(rx2).await;
+                })
+            });
+
+            drop(tx);
+
+            timeout(TEST_TIMEOUT, async move {
+                for handle in handles {
+                    handle.await;
+                }
             })
-        });
-
-        drop(tx);
-
-        timeout(TEST_TIMEOUT, async move {
-            for handle in handles {
-                handle.await;
-            }
-        })
-        .await
-        .expect("test timeout");
+            .await
+            .expect("test timeout");
+        }
     }
 }

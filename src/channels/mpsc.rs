@@ -359,7 +359,7 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
-        test::{Channel, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -403,7 +403,7 @@ mod tokio_tests {
         drop(tx);
 
         let rx_handle = spawn(async move {
-            let mut channel = Channel::new(0);
+            let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
             while let Some(message) = rx.recv().await {
                 channel.assert_message(&message);
             }
@@ -421,7 +421,7 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{Channel, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
@@ -463,7 +463,7 @@ mod async_std_tests {
         drop(tx);
 
         let rx_handle = spawn(async move {
-            let mut channel = Channel::new(0);
+            let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
             while let Some(message) = rx.recv().await {
                 channel.assert_message(&message);
             }

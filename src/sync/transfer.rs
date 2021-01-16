@@ -4,7 +4,10 @@ use atomic::{Atomic, Ordering};
 
 use crate::PollRecv;
 
-use super::oneshot_cell::{OneshotCell, TryRecvError};
+use super::{
+    notifier::Notifier,
+    oneshot_cell::{OneshotCell, TryRecvError},
+};
 
 #[derive(Copy, Clone)]
 enum State {
@@ -16,7 +19,7 @@ pub struct Transfer<T: Sized> {
     sender: Atomic<State>,
     receiver: Atomic<State>,
     value: OneshotCell<T>,
-    waker: OneshotCell<Waker>,
+    notify_rx: Notifier,
 }
 
 impl<T> Transfer<T> {
@@ -25,7 +28,7 @@ impl<T> Transfer<T> {
             sender: Atomic::new(State::Alive),
             receiver: Atomic::new(State::Alive),
             value: OneshotCell::new(),
-            waker: OneshotCell::new(),
+            notify_rx: Notifier::new(),
         }
     }
 
@@ -35,11 +38,7 @@ impl<T> Transfer<T> {
         }
 
         self.value.send(value)?;
-
-        match self.waker.try_recv() {
-            Ok(waker) => waker.wake(),
-            Err(_) => {}
-        };
+        self.notify_rx.notify();
 
         Ok(())
     }
@@ -49,12 +48,20 @@ impl<T> Transfer<T> {
             Ok(value) => PollRecv::Ready(value),
             Err(TryRecvError::Pending) => {
                 if let State::Dead = self.sender.load(Ordering::Acquire) {
-                    return PollRecv::Closed;
+                    return match self.value.try_recv() {
+                        Ok(v) => PollRecv::Ready(v),
+                        Err(TryRecvError::Pending) => PollRecv::Pending,
+                        Err(TryRecvError::Closed) => PollRecv::Closed,
+                    };
                 }
 
-                self.waker.send(waker.clone()).unwrap();
+                self.notify_rx.subscribe(waker.clone());
 
-                PollRecv::Pending
+                match self.value.try_recv() {
+                    Ok(v) => PollRecv::Ready(v),
+                    Err(TryRecvError::Pending) => PollRecv::Pending,
+                    Err(TryRecvError::Closed) => PollRecv::Closed,
+                }
             }
             Err(TryRecvError::Closed) => PollRecv::Closed,
         }
