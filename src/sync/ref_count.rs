@@ -11,6 +11,7 @@ pub enum TryDecrement {
 }
 
 impl TryDecrement {
+    #[track_caller]
     pub fn expect_dead(&self, message: &str) {
         if let Self::Alive = self {
             panic!("TryDecrement unwrapped on an Alive value: {}", message);

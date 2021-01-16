@@ -50,7 +50,7 @@ impl<T> Transfer<T> {
                 if let State::Dead = self.sender.load(Ordering::Acquire) {
                     return match self.value.try_recv() {
                         Ok(v) => PollRecv::Ready(v),
-                        Err(TryRecvError::Pending) => PollRecv::Pending,
+                        Err(TryRecvError::Pending) => PollRecv::Closed,
                         Err(TryRecvError::Closed) => PollRecv::Closed,
                     };
                 }
