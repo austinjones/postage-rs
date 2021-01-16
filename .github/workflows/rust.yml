@@ -35,6 +35,20 @@ jobs:
           command: test
           args: --all-features --no-run
 
+      - name: cargo build | dependencies
+        uses: actions-rs/cargo@v1
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          command: build
+          args: --release --all-features
+
+      - name: cargo build | dev dependencies
+        uses: actions-rs/cargo@v1
+        if: steps.cargo-cache.outputs.cache-hit != 'true'
+        with:
+          command: test
+          args: --release --all-features --no-run
+
   check:
     name: cargo check
     needs: dependencies
@@ -83,3 +97,18 @@ jobs:
         with:
           command: test
           args: --all-features
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --no-default-features
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --all-features
+
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --release --no-default-features
