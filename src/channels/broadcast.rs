@@ -137,7 +137,7 @@ mod tests {
 
     use crate::{PollRecv, PollSend, Sink, Stream};
     use futures_test::task::{new_count_waker, noop_context, panic_context};
-    use simple_logger::SimpleLogger;
+    
 
     use super::{channel, Receiver, Sender};
 
@@ -243,7 +243,7 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel(2);
+        let (mut tx, _rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,

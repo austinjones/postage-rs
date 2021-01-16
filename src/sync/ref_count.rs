@@ -53,7 +53,7 @@ impl RefCount {
                 return TryDecrement::Dead;
             }
 
-            if let Ok(prev) =
+            if let Ok(_prev) =
                 self.count
                     .compare_exchange(state, state - 1, Ordering::AcqRel, Ordering::Relaxed)
             {

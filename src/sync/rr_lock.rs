@@ -1,4 +1,4 @@
-use std::{cell::UnsafeCell, sync::atomic::AtomicUsize};
+use std::cell::UnsafeCell;
 
 use super::{
     notifier::Notifier,
@@ -109,10 +109,6 @@ impl<T> ReadReleaseLock<T> {
         self.on_write.subscribe(context.waker().clone());
     }
 
-    pub fn subscribe_release(&self, context: &Context<'_>) {
-        self.on_release.subscribe(context.waker().clone());
-    }
-
     pub fn acquire_next(&self) {
         self.next_readers.increment()
     }
@@ -178,12 +174,6 @@ where
         let r = reference.as_ref().unwrap();
         r.as_ref().unwrap().clone()
     }
-
-    unsafe fn take_value(&self) -> T {
-        let reference = self.value.get();
-        let r = reference.as_mut().unwrap();
-        r.take().unwrap()
-    }
 }
 
 impl<T> Debug for ReadReleaseLock<T> {
@@ -198,11 +188,6 @@ pub enum TryRead<T> {
     NotLocked,
     Read(T),
     Pending,
-}
-
-pub enum TryClose {
-    Released,
-    Closed,
 }
 
 pub enum TryWrite<T> {

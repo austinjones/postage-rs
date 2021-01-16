@@ -1,5 +1,4 @@
 use std::{
-    cell::UnsafeCell,
     cmp::max,
     sync::atomic::{AtomicBool, AtomicUsize},
 };
@@ -8,7 +7,7 @@ use atomic::{Atomic, Ordering};
 use std::task::Context;
 
 use super::{
-    ref_count::{RefCount, TryDecrement},
+    ref_count::{TryDecrement},
     rr_lock::{self, ReadReleaseLock},
 };
 use std::fmt::Debug;
