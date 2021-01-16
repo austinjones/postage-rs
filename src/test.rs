@@ -1,9 +1,13 @@
 use std::time::Duration;
 
-pub const CHANNEL_TEST_ITERATIONS: usize = 5000;
+pub const CHANNEL_TEST_ITERATIONS: usize = 2500;
 pub const CHANNEL_TEST_SENDERS: usize = 10;
 pub const CHANNEL_TEST_RECEIVERS: usize = 10;
 pub const TEST_TIMEOUT: Duration = Duration::from_millis(60000);
+
+pub fn capacity_iter() -> impl Iterator<Item = usize> {
+    (1..7).map(|i| 2usize.pow(i))
+}
 
 // TODO: iterators over channel sender/receiver counts, channel sizes
 pub struct MessageIter<I> {

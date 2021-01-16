@@ -58,7 +58,10 @@ impl<T> Sink for Sender<T> {
                 self.shared.subscribe_recv(cx.waker().clone());
 
                 match queue.push(v) {
-                    Ok(_) => PollSend::Ready,
+                    Ok(_) => {
+                        self.shared.notify_receivers();
+                        PollSend::Ready
+                    }
                     Err(v) => PollSend::Pending(v),
                 }
             }
@@ -96,7 +99,10 @@ impl<T> Stream for Receiver<T> {
                 self.shared.subscribe_send(cx.waker().clone());
 
                 match self.shared.extension().queue.pop() {
-                    Some(v) => PollRecv::Ready(v),
+                    Some(v) => {
+                        self.shared.notify_senders();
+                        PollRecv::Ready(v)
+                    }
                     None => PollRecv::Pending,
                 }
             }
@@ -368,60 +374,64 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{capacity_iter, Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
     #[tokio::test(flavor = "multi_thread")]
     async fn simple() {
-        let (mut tx, mut rx) = super::channel(4);
+        for cap in capacity_iter() {
+            let (mut tx, mut rx) = super::channel(cap);
 
-        let join = spawn(async move {
-            for message in Message::new_iter(0) {
-                tx.send(message).await.expect("send failed");
-            }
-        });
+            let join = spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx.send(message).await.expect("send failed");
+                }
+            });
 
-        let rx_handle = spawn(async move {
-            let mut channel = Channel::new(0);
-            while let Some(message) = rx.recv().await {
-                channel.assert_message(&message);
-            }
-            join.await.expect("Join failed");
-        });
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
+                }
+                join.await.expect("Join failed");
+            });
 
-        timeout(TEST_TIMEOUT, rx_handle)
-            .await
-            .expect("test timeout")
-            .expect("join error");
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout")
+                .expect("join error");
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn multi_sender() {
-        let (tx, mut rx) = super::channel(4);
+        for cap in capacity_iter() {
+            let (tx, mut rx) = super::channel(cap);
 
-        for i in 0..CHANNEL_TEST_SENDERS {
-            let mut tx2 = tx.clone();
-            spawn(async move {
-                for message in Message::new_iter(i) {
-                    tx2.send(message).await.expect("send failed");
+            for i in 0..CHANNEL_TEST_SENDERS {
+                let mut tx2 = tx.clone();
+                spawn(async move {
+                    for message in Message::new_iter(i) {
+                        tx2.send(message).await.expect("send failed");
+                    }
+                });
+            }
+
+            drop(tx);
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
                 }
             });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout")
+                .expect("join error");
         }
-
-        drop(tx);
-
-        let rx_handle = spawn(async move {
-            let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
-            while let Some(message) = rx.recv().await {
-                channel.assert_message(&message);
-            }
-        });
-
-        timeout(TEST_TIMEOUT, rx_handle)
-            .await
-            .expect("test timeout")
-            .expect("join error");
     }
 }
 
@@ -430,56 +440,60 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
-        test::{Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
+        test::{capacity_iter, Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
         Sink, Stream,
     };
 
     #[async_std::test]
     async fn simple() {
-        let (mut tx, mut rx) = super::channel(4);
+        for cap in capacity_iter() {
+            let (mut tx, mut rx) = super::channel(cap);
 
-        spawn(async move {
-            for message in Message::new_iter(0) {
-                tx.send(message).await.expect("send failed");
-            }
-        });
+            spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx.send(message).await.expect("send failed");
+                }
+            });
 
-        let rx_handle = spawn(async move {
-            let mut channel = Channel::new(0);
-            while let Some(message) = rx.recv().await {
-                channel.assert_message(&message);
-            }
-        });
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
+                }
+            });
 
-        timeout(TEST_TIMEOUT, rx_handle)
-            .await
-            .expect("test timeout");
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout");
+        }
     }
 
     #[async_std::test]
     async fn multi_sender() {
-        let (tx, mut rx) = super::channel(4);
+        for cap in capacity_iter() {
+            let (tx, mut rx) = super::channel(cap);
 
-        for i in 0..CHANNEL_TEST_SENDERS {
-            let mut tx2 = tx.clone();
-            spawn(async move {
-                for message in Message::new_iter(i) {
-                    tx2.send(message).await.expect("send failed");
+            for i in 0..CHANNEL_TEST_SENDERS {
+                let mut tx2 = tx.clone();
+                spawn(async move {
+                    for message in Message::new_iter(i) {
+                        tx2.send(message).await.expect("send failed");
+                    }
+                });
+            }
+
+            drop(tx);
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
                 }
             });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout");
         }
-
-        drop(tx);
-
-        let rx_handle = spawn(async move {
-            let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
-            while let Some(message) = rx.recv().await {
-                channel.assert_message(&message);
-            }
-        });
-
-        timeout(TEST_TIMEOUT, rx_handle)
-            .await
-            .expect("test timeout");
     }
 }
