@@ -342,8 +342,10 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
+    use tokio::spawn;
+
     use crate::{
-        test::{Channel, Message},
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS},
         Sink, Stream,
     };
 
@@ -360,9 +362,38 @@ mod tokio_tests {
             }
         });
 
-        let mut channel = Channel::new(0);
+        let mut channel = Channel::new(0).allow_skips();
         while let Some(message) = rx.recv().await {
             channel.assert_message(&message);
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_receiver() {
+        let (mut tx, rx) = super::channel();
+
+        tokio::task::spawn(async move {
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                tx.send(message).await.expect("send failed");
+            }
+        });
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(move |_| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(CHANNEL_TEST_RECEIVERS).allow_skips();
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await.expect("join failed");
         }
     }
 }
@@ -372,7 +403,7 @@ mod async_std_tests {
     use async_std::task::spawn;
 
     use crate::{
-        test::{Channel, Message},
+        test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS},
         Sink, Stream,
     };
 
@@ -389,9 +420,38 @@ mod async_std_tests {
             }
         });
 
-        let mut channel = Channel::new(0);
+        let mut channel = Channel::new(0).allow_skips();
         while let Some(message) = rx.recv().await {
             channel.assert_message(&message);
+        }
+    }
+
+    #[tokio::test]
+    async fn multi_receiver() {
+        let (mut tx, rx) = super::channel();
+
+        tokio::task::spawn(async move {
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                tx.send(message).await.expect("send failed");
+            }
+        });
+
+        let handles = (0..CHANNEL_TEST_RECEIVERS).map(move |_| {
+            let mut rx2 = rx.clone();
+            let mut channels = Channels::new(CHANNEL_TEST_RECEIVERS).allow_skips();
+
+            spawn(async move {
+                while let Some(message) = rx2.recv().await {
+                    channels.assert_message(&message);
+                }
+            })
+        });
+
+        for handle in handles {
+            handle.await;
         }
     }
 }

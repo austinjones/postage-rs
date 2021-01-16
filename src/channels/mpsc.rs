@@ -50,7 +50,11 @@ impl<T> Sink for Sender<T> {
             }
             Err(v) => {
                 self.shared.subscribe_recv(cx.waker().clone());
-                PollSend::Pending(v)
+
+                match queue.push(v) {
+                    Ok(_) => PollSend::Ready,
+                    Err(v) => PollSend::Pending(v),
+                }
             }
         }
     }
@@ -81,7 +85,11 @@ impl<T> Stream for Receiver<T> {
                 }
 
                 self.shared.subscribe_send(cx.waker().clone());
-                PollRecv::Pending
+
+                match self.shared.extension().queue.pop() {
+                    Some(v) => PollRecv::Ready(v),
+                    None => PollRecv::Pending,
+                }
             }
         }
     }

@@ -59,6 +59,14 @@ impl Channels {
         Self { channels }
     }
 
+    pub fn allow_skips(mut self) -> Self {
+        for channel in self.channels.iter_mut() {
+            channel.allow_skips = true;
+        }
+
+        self
+    }
+
     #[track_caller]
     pub fn assert_message(&mut self, message: &Message) {
         self.channels[message.sender].assert_message(message);
@@ -68,6 +76,7 @@ impl Channels {
 pub struct Channel {
     sender: usize,
     current_index: usize,
+    allow_skips: bool,
 }
 
 impl Channel {
@@ -75,11 +84,30 @@ impl Channel {
         Self {
             sender,
             current_index: 0,
+            allow_skips: false,
         }
+    }
+
+    pub fn allow_skips(mut self) -> Self {
+        self.allow_skips = true;
+        self
     }
 
     #[track_caller]
     pub fn assert_message(&mut self, message: &Message) {
+        if self.allow_skips {
+            assert_eq!(self.sender, message.sender);
+            if message.index < self.current_index {
+                panic!(
+                    "for sender {}, expected message >= {}, found {}",
+                    self.sender, self.current_index, message.index
+                );
+            }
+
+            self.current_index = message.index;
+            return;
+        }
+
         assert_eq!(
             (self.sender, self.current_index),
             (message.sender, message.index)

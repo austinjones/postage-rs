@@ -750,7 +750,7 @@ mod tokio_tests {
 
         let (tx, mut rx) = super::channel(2);
 
-        for i in 0..2 {
+        for i in 0..CHANNEL_TEST_SENDERS {
             let mut tx2 = tx.clone();
             spawn(async move {
                 for message in Message::new_iter(i) {
@@ -780,7 +780,7 @@ mod tokio_tests {
             }
         });
 
-        let handles: Vec<JoinHandle<()>> = (0..2)
+        let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
             .map(|_| {
                 let mut rx2 = rx.clone();
                 let mut channels = Channels::new(1);
@@ -839,7 +839,7 @@ mod tokio_tests {
 
 #[cfg(test)]
 mod async_std_tests {
-    use async_std::task::spawn;
+    use async_std::task::{spawn, JoinHandle};
 
     use crate::{
         test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, CHANNEL_TEST_SENDERS},
@@ -893,16 +893,20 @@ mod async_std_tests {
             }
         });
 
-        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_| {
-            let mut rx2 = rx.clone();
-            let mut channels = Channels::new(1);
+        let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
+            .map(|_| {
+                let mut rx2 = rx.clone();
+                let mut channels = Channels::new(1);
 
-            spawn(async move {
-                while let Some(message) = rx2.recv().await {
-                    channels.assert_message(&message);
-                }
+                spawn(async move {
+                    while let Some(message) = rx2.recv().await {
+                        channels.assert_message(&message);
+                    }
+                })
             })
-        });
+            .collect();
+
+        drop(rx);
 
         for handle in handles {
             handle.await;
@@ -924,16 +928,20 @@ mod async_std_tests {
 
         drop(tx);
 
-        let handles = (0..CHANNEL_TEST_RECEIVERS).map(|_i| {
-            let mut rx2 = rx.clone();
-            let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
+        let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
+            .map(|_i| {
+                let mut rx2 = rx.clone();
+                let mut channels = Channels::new(CHANNEL_TEST_SENDERS);
 
-            spawn(async move {
-                while let Some(message) = rx2.recv().await {
-                    channels.assert_message(&message);
-                }
+                spawn(async move {
+                    while let Some(message) = rx2.recv().await {
+                        channels.assert_message(&message);
+                    }
+                })
             })
-        });
+            .collect();
+
+        drop(rx);
 
         for handle in handles {
             handle.await;
