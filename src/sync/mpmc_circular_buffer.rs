@@ -5,7 +5,6 @@ use std::{
 };
 
 use atomic::{Atomic, Ordering};
-use log::{info, warn};
 use std::task::Context;
 
 use super::{
@@ -95,16 +94,19 @@ impl<T> MpmcCircularBuffer<T> {
             self.head_lock.store(false, Ordering::Release);
         }) {
             rr_lock::TryWrite::Ready => {
-                info!("Write {} complete: {:?}", head_id, head_slot);
+                #[cfg(feature = "logging")]
+                log::trace!("Write {} complete: {:?}", head_id, head_slot);
 
                 return TryWrite::Ready;
             }
             rr_lock::TryWrite::Pending(v) => {
                 self.head_lock.store(false, Ordering::Release);
 
-                info!(
+                #[cfg(feature = "logging")]
+                log::trace!(
                     "Write {} pending, slot is reading: {:?}",
-                    head_id, head_slot
+                    head_id,
+                    head_slot
                 );
                 return TryWrite::Pending(v);
             }
@@ -169,15 +171,19 @@ impl BufferReader {
                     let slot = buffer.get_slot(index);
                     slot.subscribe_write(cx);
 
-                    info!(
+                    #[cfg(feature = "logging")]
+                    log::trace!(
                         "TryRead {} still blocked on head {}, slot: {:?}",
-                        index, head, slot
+                        index,
+                        head,
+                        slot
                     );
 
                     return TryRead::Pending;
                 }
 
-                info!("TryRead {} un-blocked", index);
+                #[cfg(feature = "logging")]
+                log::trace!("TryRead {} un-blocked", index);
 
                 self.state.store(ReaderState::Reading, Ordering::Release);
             }
@@ -187,7 +193,8 @@ impl BufferReader {
         let index = self.index.load(Ordering::Acquire);
         let slot = buffer.get_slot(index);
 
-        // info!("TryRead {}, slot: {:?}", index, slot);
+        // #[cfg(feature = "logging")]
+        // trace!("TryRead {}, slot: {:?}", index, slot);
 
         match slot.try_read(cx) {
             rr_lock::TryRead::NotLocked => {
@@ -197,12 +204,14 @@ impl BufferReader {
                 self.advance(index, buffer, cx);
                 self.release(index, buffer);
 
-                info!("Read {} complete, slot: {:?}", index, slot);
+                #[cfg(feature = "logging")]
+                log::trace!("Read {} complete, slot: {:?}", index, slot);
 
                 return TryRead::Ready(value);
             }
             rr_lock::TryRead::Pending => {
-                info!("Read {} pending, slot: {:?}", index, slot);
+                #[cfg(feature = "logging")]
+                log::trace!("Read {} pending, slot: {:?}", index, slot);
                 return TryRead::Pending;
             }
         }
@@ -268,7 +277,8 @@ impl BufferReader {
 
             self.state.store(ReaderState::Blocked, Ordering::Release);
             slot.subscribe_write(cx);
-            info!("Reader blocked at slot {}, head is {}", next_id, head_id);
+            #[cfg(feature = "logging")]
+            log::trace!("Reader blocked at slot {}, head is {}", next_id, head_id);
         } else {
             buffer.get_slot(next_id).acquire();
             buffer.head_lock.store(false, Ordering::Release);
@@ -285,7 +295,8 @@ impl BufferReader {
         let slot = buffer.get_slot(id);
         match slot.decrement() {
             TryDecrement::Alive => {
-                info!("Read {} decremented", id);
+                #[cfg(feature = "logging")]
+                log::trace!("Read {} decremented", id);
             }
             TryDecrement::Dead => {
                 let tail = buffer.tail.load(Ordering::Acquire);
@@ -295,14 +306,16 @@ impl BufferReader {
 
                     buffer.tail.store(tail + 1, Ordering::Release);
 
-                    info!(
+                    #[cfg(feature = "logging")]
+                    log::trace!(
                         "Read {} released, tail incremented from {} to {}",
                         id,
                         tail,
                         tail + 1
                     );
                 } else {
-                    info!("Read {} decremented to 0 (not tail {})", id, tail);
+                    #[cfg(feature = "logging")]
+                    log::trace!("Read {} decremented to 0 (not tail {})", id, tail);
                 }
             }
         }

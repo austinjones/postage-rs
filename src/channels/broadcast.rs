@@ -1,4 +1,3 @@
-use log::info;
 use static_assertions::assert_impl_all;
 
 use crate::{
@@ -115,7 +114,6 @@ where
 
 impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
-        info!("clone receiver");
         let buffer = self.shared.extension();
         let reader = self.reader.clone(buffer);
 
@@ -128,7 +126,6 @@ impl<T> Clone for Receiver<T> {
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
-        info!("drop receiver");
         let buffer = self.shared.extension();
         self.reader.drop(buffer);
     }
@@ -710,14 +707,7 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
-    use std::time::Duration;
-
-    use log::{info, LevelFilter};
-    use simple_logger::SimpleLogger;
-    use tokio::{
-        task::{spawn, JoinHandle},
-        time::sleep,
-    };
+    use tokio::task::{spawn, JoinHandle};
 
     use crate::{
         test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, CHANNEL_TEST_SENDERS},
@@ -785,7 +775,6 @@ mod tokio_tests {
                 let mut rx2 = rx.clone();
                 let mut channels = Channels::new(1);
 
-                info!("spawn");
                 spawn(async move {
                     while let Some(message) = rx2.recv().await {
                         channels.assert_message(&message);

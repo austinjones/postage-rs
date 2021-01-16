@@ -1,7 +1,5 @@
 use std::{collections::LinkedList, sync::Mutex, task::Waker};
 
-use log::info;
-
 #[derive(Debug)]
 pub struct Notifier {
     wakers: Mutex<LinkedList<Waker>>,
@@ -23,7 +21,8 @@ impl Notifier {
             waker.wake();
         }
 
-        info!("Woke {} tasks", woken);
+        #[cfg(feature = "logging")]
+        log::trace!("Woke {} tasks", woken);
     }
 
     pub fn subscribe(&self, waker: Waker) {
