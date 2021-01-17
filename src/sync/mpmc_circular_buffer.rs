@@ -21,9 +21,15 @@ pub struct MpmcCircularBuffer<T> {
 
 impl<T> Debug for MpmcCircularBuffer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let head = self
+            .head
+            .try_read()
+            .map(|v| (*v).to_string())
+            .unwrap_or("<unknown>".to_string());
+
         f.debug_struct("MpmcCircularBuffer")
             .field("buffer", &self.buffer)
-            .field("head", &self.head)
+            .field("head", &head)
             .field("readers", &self.readers)
             .finish()
     }

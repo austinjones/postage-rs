@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn send_accepted() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         let mut cx = panic_context();
         let mut chan = channel(2);
         let (tx, _rx) = pin(&mut chan);
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn sender_subscribe_same_read() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel(2);
 
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn drop_receiver_frees_slot() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         let mut cx = panic_context();
         let (mut tx, mut rx) = channel(2);
         let rx2 = rx.clone();
@@ -775,7 +775,7 @@ mod tokio_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
@@ -846,7 +846,7 @@ mod tokio_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
@@ -996,7 +996,7 @@ mod async_std_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
@@ -1019,7 +1019,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_receiver() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, rx) = super::channel(cap);
 
@@ -1058,7 +1058,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_sender_multi_receiver() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
 
         for cap in capacity_iter() {
             let (tx, rx) = super::channel(cap);
@@ -1066,7 +1066,7 @@ mod async_std_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
@@ -1103,7 +1103,7 @@ mod async_std_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn clone_monster() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
 
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);

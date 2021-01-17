@@ -1,4 +1,4 @@
-use super::CHANNEL_TEST_ITERATIONS;
+use super::{CHANNEL_TEST_ITERATIONS, CHANNEL_TEST_SENDERS};
 
 pub fn capacity_iter() -> impl Iterator<Item = usize> {
     (1..6).map(|i| 2usize.pow(i))
@@ -44,6 +44,14 @@ impl Message {
         MessageIter {
             sender,
             iter: (0..CHANNEL_TEST_ITERATIONS),
+        }
+    }
+
+    pub fn new_multi_sender(sender: usize) -> impl Iterator<Item = Message> {
+        let messages = CHANNEL_TEST_ITERATIONS / CHANNEL_TEST_SENDERS;
+        MessageIter {
+            sender,
+            iter: (0..messages),
         }
     }
 }

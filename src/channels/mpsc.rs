@@ -416,7 +416,7 @@ mod tokio_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
@@ -533,7 +533,7 @@ mod async_std_tests {
             for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
-                    for message in Message::new_iter(i) {
+                    for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
                     }
                 });
