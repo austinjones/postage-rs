@@ -1,5 +1,7 @@
-//! Watch channels can be used to asynchronously transmit state.  
-//! When receivers are created, they immediately recieve an initial value.  
+//! Watch channels can be used to asynchronously transmit state between tasks
+//!  
+//! When receivers are cloned, they immediately recieve an initial value that is held in the channel.
+//!
 //! They will also recieve new values, but are not guaranteed to recieve *every* value.
 //!
 //! Values transmitted over watch channels must implement Default.  A simple way to achieve this is to transmit `Option<T>`.

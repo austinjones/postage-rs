@@ -54,7 +54,7 @@ pub trait Sink {
         }
     }
 
-    /// Chains two sink implementations.  Messages will be transmitted to the argument until it rejects a message
+    /// Chains two sink implementations.  Messages will be transmitted to the argument until it rejects a message.
     /// Then messages will be transmitted to self.
     fn after<Before>(self, before: Before) -> chain::SinkChain<Before, Self>
     where

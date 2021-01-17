@@ -1,7 +1,7 @@
 # postage-rs
 The feature-rich, portable async channel library.
 
-Postage is in *beta* quality.  The functionality is implemented and tested, but needs to be tested on more hardware, and more operating systems.
+Postage is in *beta* quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
 
 Why use Postage?
 - Includes a **rich set of channels**, and it works with any async executor (currently regressions are written for tokio and async-std)
@@ -24,7 +24,7 @@ The broadcast channel provides multi-sender, multi-receiver message dispatch.  A
 
 When a receiver is cloned, both receivers will be sent the same series of messages.
 
-Senders also provide a `subscribe()` method which adds a receiver on the oldest value.
+Senders also provide a `subscribe()` method which creates a receiver that will observe all messages sent *after* the call to subscribe.
 
 ### postage::watch
 Watch channels can be used to asynchronously transmit state.  When receivers are created, they immediately recieve an initial value.  They will also recieve new values, but are not guaranteed to recieve *every* value.

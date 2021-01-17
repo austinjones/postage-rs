@@ -1,7 +1,7 @@
 //! The broadcast channel provides multi-sender, multi-receiver message dispatch. All receivers are sent every message.
 //! The channel has a fixed capacity, and senders are suspended if the buffer is filled.
 //!
-//! When a receiver is cloned, both receivers will be sent the same series of messages.
+//! When a receiver is cloned, both receivers will observe the same series of messages.
 //!
 //! Senders also provide a subscribe() method which adds a receiver on the oldest value.
 
@@ -78,7 +78,8 @@ where
 }
 
 impl<T> Sender<T> {
-    /// Subscribes to the channel, creating a new receiver that receives new messages.  
+    /// Subscribes to the channel, creating a new receiver.  The receiver
+    /// will observe all messages sent after the call to subscribe.
     ///
     /// Messages currently in the buffer are not received.
     pub fn subscribe(&self) -> Receiver<T> {
