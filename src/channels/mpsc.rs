@@ -105,7 +105,12 @@ impl<T> Stream for Receiver<T> {
                         self.shared.notify_senders();
                         PollRecv::Ready(v)
                     }
-                    None => PollRecv::Pending,
+                    None => {
+                        if self.shared.is_closed() {
+                            return PollRecv::Closed;
+                        }
+                        PollRecv::Pending
+                    }
                 }
             }
         }
@@ -384,6 +389,8 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn simple() {
+        // crate::logging::enable_log();
+
         for cap in capacity_iter() {
             let (mut tx, mut rx) = super::channel(cap);
 
