@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn send_accepted() {
-        // SimpleLogger::new().init().unwrap();
+        crate::logging::enable_log();
         let mut cx = panic_context();
         let mut chan = channel(2);
         let (tx, _rx) = pin(&mut chan);
@@ -691,40 +691,36 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn sender_receiver_hang_bug() {
-    //     let mut cx = noop_context();
-    //     let (mut tx, mut rx) = channel(2);
+    #[test]
+    fn drop_preserves_read() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel(2);
 
-    //     assert_eq!(
-    //         PollSend::Ready,
-    //         Pin::new(&mut tx).poll_send(&mut cx, Message(1))
-    //     );
+        let _rx_pin_message_1 = rx.clone();
 
-    //     assert_eq!(
-    //         PollRecv::Ready(Message(1)),
-    //         Pin::new(&mut rx).poll_recv(&mut cx)
-    //     );
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
 
-    //     assert_eq!(
-    //         PollSend::Ready,
-    //         Pin::new(&mut tx).poll_send(&mut cx, Message(2))
-    //     );
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+        );
 
-    //     let (w3, w3_count) = new_count_waker();
-    //     let mut w3_context = Context::from_waker(&w3);
-    //     assert_eq!(
-    //         PollSend::Pending(Message(3)),
-    //         Pin::new(&mut tx).poll_send(&mut w3_context, Message(3))
-    //     );
+        assert_eq!(
+            PollRecv::Ready(Message(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
 
-    //     assert_eq!(
-    //         PollRecv::Ready(Message(2)),
-    //         Pin::new(&mut rx).poll_recv(&mut cx)
-    //     );
+        let rx2 = rx.clone();
+        drop(rx2);
 
-    //     assert_eq!(1, w3_count.get());
-    // }
+        assert_eq!(
+            PollSend::Pending(Message(3)),
+            Pin::new(&mut tx).poll_send(&mut cx, Message(3))
+        );
+    }
 }
 
 #[cfg(test)]
@@ -772,7 +768,7 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn multi_sender() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
 
@@ -813,7 +809,7 @@ mod tokio_tests {
                 }
             });
 
-            let handles: Vec<JoinHandle<()>> = (0..2)
+            let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
                 .map(|_| {
                     let mut rx2 = rx.clone();
                     let mut channels = Channels::new(1);
@@ -921,11 +917,12 @@ mod tokio_tests {
                     }
 
                     // let tx3 = tx.clone();
-                    let rx3 = rx2.clone();
-                    // let rx4 = tx.subscribe();
+                    // let rx3 = rx2.clone();
+                    let rx4 = tx.subscribe();
+                    time::sleep(Duration::from_micros(1000)).await;
                     // drop(tx3);
-                    drop(rx3);
-                    // drop(rx4);
+                    // drop(rx3);
+                    drop(rx4);
                     time::sleep(Duration::from_micros(50)).await;
                 }
 
@@ -966,7 +963,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn simple() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, mut rx) = super::channel(cap);
 
@@ -991,12 +988,12 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_sender() {
-        crate::logging::enable_log();
+        // crate::logging::enable_log();
 
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
 
-            for i in 0..2 {
+            for i in 0..CHANNEL_TEST_SENDERS {
                 let mut tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_iter(i) {
@@ -1032,7 +1029,7 @@ mod async_std_tests {
                 }
             });
 
-            let handles: Vec<JoinHandle<()>> = (0..2)
+            let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
                 .map(|_| {
                     let mut rx2 = rx.clone();
                     let mut channels = Channels::new(1);

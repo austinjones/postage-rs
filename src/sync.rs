@@ -10,7 +10,7 @@ pub mod mpmc_circular_buffer;
 pub mod notifier;
 mod oneshot_cell;
 mod ref_count;
-mod rr_lock;
+// mod rr_lock;
 mod state_cell;
 pub(crate) mod transfer;
 

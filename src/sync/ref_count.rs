@@ -31,18 +31,6 @@ impl RefCount {
         self.count.load(Ordering::Acquire) > 0
     }
 
-    pub fn load(&self, ordering: Ordering) -> usize {
-        self.count.load(ordering)
-    }
-
-    pub fn take(&self) -> usize {
-        self.count.swap(0, Ordering::AcqRel)
-    }
-
-    pub fn add(&self, n: usize) {
-        self.count.fetch_add(n, Ordering::AcqRel);
-    }
-
     pub fn increment(&self) {
         self.count.fetch_add(1, Ordering::AcqRel);
     }
