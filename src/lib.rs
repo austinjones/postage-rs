@@ -15,6 +15,8 @@
 //! Postage is in *beta* quality.  The functionality is implemented and tested, but needs to be tested on more hardware, and more operating systems.
 
 mod channels;
+#[macro_use]
+mod logging;
 mod sink;
 mod stream;
 mod sync;

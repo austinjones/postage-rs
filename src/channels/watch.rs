@@ -21,6 +21,9 @@ use crate::{
 
 /// Constructs a new watch channel pair, filled with T::default()
 pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
+    #[cfg(feature = "debug")]
+    log::error!("Creating watch channel");
+
     let (tx_shared, rx_shared) = shared(StateExtension::new(T::default()));
     let sender = Sender { shared: tx_shared };
 

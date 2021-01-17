@@ -34,7 +34,7 @@ pub struct Shared<E> {
     sender_count: RefCount,
     receiver_notify: Notifier,
     receiver_count: RefCount,
-    extension: E,
+    pub(crate) extension: E,
 }
 
 impl<E> Shared<E> {
@@ -104,7 +104,7 @@ impl<E> Clone for SenderShared<E> {
 impl<E> Drop for SenderShared<E> {
     fn drop(&mut self) {
         match self.inner.sender_count.decrement() {
-            TryDecrement::Alive => {}
+            TryDecrement::Alive(_) => {}
             TryDecrement::Dead => {
                 self.notify_receivers();
             }
@@ -113,7 +113,7 @@ impl<E> Drop for SenderShared<E> {
 }
 
 pub struct ReceiverShared<E> {
-    inner: Arc<Shared<E>>,
+    pub(crate) inner: Arc<Shared<E>>,
 }
 
 impl<E> ReceiverShared<E> {
@@ -150,7 +150,7 @@ impl<E> Clone for ReceiverShared<E> {
 impl<E> Drop for ReceiverShared<E> {
     fn drop(&mut self) {
         match self.inner.receiver_count.decrement() {
-            TryDecrement::Alive => {}
+            TryDecrement::Alive(_) => {}
             TryDecrement::Dead => {
                 self.notify_senders();
             }

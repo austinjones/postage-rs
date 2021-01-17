@@ -5,6 +5,8 @@
 //!
 //! Senders also provide a subscribe() method which adds a receiver on the oldest value.
 
+use std::sync::Mutex;
+
 use static_assertions::assert_impl_all;
 
 use crate::{
@@ -17,6 +19,8 @@ use crate::{
 
 /// Constructs a pair of broadcast endpoints, with a fixed-size buffer of the given capacity
 pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+    #[cfg(feature = "debug")]
+    log::error!("Creating broadcast channel with capacity {}", capacity);
     // we add one spare capacity so that receivers have an empty slot to wait on
     let (buffer, reader) = MpmcCircularBuffer::new(capacity);
 
@@ -74,12 +78,14 @@ where
 }
 
 impl<T> Sender<T> {
-    /// Subscribes to the channel, creating a new receiver that starts on the oldest message.
+    /// Subscribes to the channel, creating a new receiver that receives new messages.  
+    ///
+    /// Messages currently in the buffer are not received.
     pub fn subscribe(&self) -> Receiver<T> {
         let shared = self.shared.clone_receiver();
         let reader = shared.extension().new_reader();
 
-        Receiver { shared, reader }
+        Receiver::new(shared, reader)
     }
 }
 
@@ -88,14 +94,17 @@ impl<T> Sender<T> {
 /// When cloned, the new receiver will begin processing messages at the same location as the original.
 pub struct Receiver<T> {
     shared: ReceiverShared<MpmcCircularBuffer<T>>,
-    reader: BufferReader,
+    reader: Mutex<BufferReader>,
 }
 
 assert_impl_all!(Receiver<String>: Send, Clone);
 
 impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {
-        Self { shared, reader }
+        Self {
+            shared,
+            reader: Mutex::new(reader),
+        }
     }
 }
 
@@ -110,7 +119,7 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
         let buffer = self.shared.extension();
-        let reader = &self.reader;
+        let mut reader = self.reader.lock().unwrap();
 
         match reader.try_read(buffer, cx) {
             TryRead::Pending => {
@@ -129,19 +138,17 @@ where
 impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
         let buffer = self.shared.extension();
-        let reader = self.reader.clone(buffer);
+        let reader = self.reader.lock().unwrap().clone(buffer);
 
-        Self {
-            shared: self.shared.clone(),
-            reader,
-        }
+        Self::new(self.shared.clone(), reader)
     }
 }
 
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         let buffer = self.shared.extension();
-        self.reader.drop(buffer);
+        let reader = &mut *self.reader.lock().unwrap();
+        reader.drop(buffer);
     }
 }
 
@@ -227,6 +234,7 @@ mod tests {
 
     #[test]
     fn sender_subscribe_same_read() {
+        crate::logging::enable_log();
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel(2);
 
@@ -518,6 +526,7 @@ mod tests {
 
     #[test]
     fn drop_receiver_frees_slot() {
+        crate::logging::enable_log();
         let mut cx = panic_context();
         let (mut tx, mut rx) = channel(2);
         let rx2 = rx.clone();
@@ -720,9 +729,11 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
+    use std::time::Duration;
+
     use tokio::{
         task::{spawn, JoinHandle},
-        time::timeout,
+        time::{self, timeout},
     };
 
     use crate::{
@@ -730,16 +741,13 @@ mod tokio_tests {
             capacity_iter, Channel, Channels, Message, CHANNEL_TEST_RECEIVERS,
             CHANNEL_TEST_SENDERS, TEST_TIMEOUT,
         },
-        Sink, Stream,
+        Sink, Stream, TryRecvError,
     };
 
     #[tokio::test(flavor = "multi_thread")]
     async fn simple() {
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
-            // SimpleLogger::new()
-            //     .with_level(LevelFilter::Warn)
-            //     .init()
-            //     .unwrap();
             let (mut tx, mut rx) = super::channel(cap);
 
             spawn(async move {
@@ -764,7 +772,7 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn multi_sender() {
-        // SimpleLogger::new().init().unwrap();
+        crate::logging::enable_log();
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
 
@@ -773,7 +781,6 @@ mod tokio_tests {
                 spawn(async move {
                     for message in Message::new_iter(i) {
                         tx2.send(message).await.expect("send failed");
-                        // sleep(Duration::from_millis(5 + 5 * i as u64)).await;
                     }
                 });
             }
@@ -796,8 +803,7 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn multi_receiver() {
-        // SimpleLogger::new().init().unwrap();
-
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, rx) = super::channel(cap);
 
@@ -807,7 +813,7 @@ mod tokio_tests {
                 }
             });
 
-            let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
+            let handles: Vec<JoinHandle<()>> = (0..2)
                 .map(|_| {
                     let mut rx2 = rx.clone();
                     let mut channels = Channels::new(1);
@@ -837,6 +843,7 @@ mod tokio_tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn multi_sender_multi_receiver() {
+        // crate::logging::enable_log();
         for cap in capacity_iter() {
             let (tx, rx) = super::channel(cap);
 
@@ -869,6 +876,66 @@ mod tokio_tests {
             let rx_handle = spawn(async move {
                 for handle in handles {
                     handle.await.expect("Assertion failure");
+                }
+            });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout")
+                .expect("join failure");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn clone_monster() {
+        // crate::logging::enable_log();
+
+        for cap in capacity_iter() {
+            let (tx, mut rx) = super::channel(cap);
+            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx2.send(message).await.expect("send failed");
+                }
+
+                barrier.send(()).await.expect("clone task shutdown failed");
+            });
+
+            let mut rx2 = rx.clone();
+            spawn(async move {
+                loop {
+                    let next = rx2.try_recv();
+
+                    if let Ok(_) = next {
+                        continue;
+                    }
+
+                    if let Err(TryRecvError::Rejected) = next {
+                        break;
+                    }
+
+                    if let Ok(_) = sender_quit.try_recv() {
+                        break;
+                    }
+
+                    // let tx3 = tx.clone();
+                    let rx3 = rx2.clone();
+                    // let rx4 = tx.subscribe();
+                    // drop(tx3);
+                    drop(rx3);
+                    // drop(rx4);
+                    time::sleep(Duration::from_micros(50)).await;
+                }
+
+                drop(tx);
+            });
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
                 }
             });
 
@@ -882,9 +949,11 @@ mod tokio_tests {
 
 #[cfg(test)]
 mod async_std_tests {
+    use std::time::Duration;
+
     use async_std::{
         future::timeout,
-        task::{spawn, JoinHandle},
+        task::{self, spawn, JoinHandle},
     };
 
     use crate::{
@@ -892,11 +961,12 @@ mod async_std_tests {
             capacity_iter, Channel, Channels, Message, CHANNEL_TEST_RECEIVERS,
             CHANNEL_TEST_SENDERS, TEST_TIMEOUT,
         },
-        Sink, Stream,
+        Sink, Stream, TryRecvError,
     };
 
     #[async_std::test]
     async fn simple() {
+        crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, mut rx) = super::channel(cap);
 
@@ -921,10 +991,12 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_sender() {
+        crate::logging::enable_log();
+
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
 
-            for i in 0..CHANNEL_TEST_SENDERS {
+            for i in 0..2 {
                 let mut tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_iter(i) {
@@ -950,6 +1022,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_receiver() {
+        crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, rx) = super::channel(cap);
 
@@ -959,7 +1032,7 @@ mod async_std_tests {
                 }
             });
 
-            let handles: Vec<JoinHandle<()>> = (0..CHANNEL_TEST_RECEIVERS)
+            let handles: Vec<JoinHandle<()>> = (0..2)
                 .map(|_| {
                     let mut rx2 = rx.clone();
                     let mut channels = Channels::new(1);
@@ -988,6 +1061,8 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn multi_sender_multi_receiver() {
+        crate::logging::enable_log();
+
         for cap in capacity_iter() {
             let (tx, rx) = super::channel(cap);
 
@@ -1020,6 +1095,72 @@ mod async_std_tests {
             let rx_handle = spawn(async move {
                 for handle in handles {
                     handle.await;
+                }
+            });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn clone_monster() {
+        crate::logging::enable_log();
+
+        for cap in capacity_iter() {
+            let (tx, mut rx) = super::channel(cap);
+            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx2.send(message).await.expect("send failed");
+                }
+
+                barrier.send(()).await.expect("clone task shutdown failed");
+            });
+
+            let mut rx2 = rx.clone();
+            spawn(async move {
+                let mut pending = 0;
+                loop {
+                    let next = rx2.try_recv();
+
+                    if let Ok(_) = next {
+                        continue;
+                    }
+
+                    if let Err(TryRecvError::Rejected) = next {
+                        break;
+                    }
+
+                    if let Ok(_) = sender_quit.try_recv() {
+                        break;
+                    }
+
+                    if pending > 10 {
+                        break;
+                    }
+
+                    pending += 1;
+
+                    // let tx3 = tx.clone();
+                    let rx3 = rx2.clone();
+                    let rx4 = tx.subscribe();
+                    // drop(tx3);
+                    drop(rx3);
+                    drop(rx4);
+                    task::sleep(Duration::from_micros(50)).await;
+                }
+
+                drop(tx);
+            });
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
                 }
             });
 

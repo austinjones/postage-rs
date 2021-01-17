@@ -126,8 +126,14 @@ impl<T> ReadReleaseLock<T> {
     }
 
     pub fn release(&self) -> TryDecrement {
-        if self.readers.load(Ordering::Acquire) > 0 {
-            return TryDecrement::Alive;
+        let readers = self.readers.load(Ordering::Acquire);
+        match self.state.load(Ordering::Acquire) {
+            State::Empty | State::Writing => return TryDecrement::Alive(readers),
+            State::Reading => {}
+        }
+
+        if readers > 0 {
+            return TryDecrement::Alive(readers);
         }
 
         self.state.store(State::Empty, Ordering::Release);

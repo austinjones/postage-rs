@@ -7,6 +7,9 @@ use static_assertions::{assert_impl_all, assert_not_impl_all};
 use crate::{sync::transfer::Transfer, PollSend, Sink, Stream};
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
+    #[cfg(feature = "debug")]
+    log::error!("Creating oneshot channel");
+
     let shared = Arc::new(Transfer::new());
     let sender = Sender {
         shared: shared.clone(),

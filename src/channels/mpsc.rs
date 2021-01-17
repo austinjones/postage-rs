@@ -10,6 +10,8 @@ use crate::{
 };
 
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+    #[cfg(feature = "debug")]
+    log::error!("Creating mpsc channel with capacity {}", capacity);
     let (tx_shared, rx_shared) = shared(StateExtension::new(capacity));
     let sender = Sender { shared: tx_shared };
 
@@ -371,6 +373,8 @@ mod tests {
 
 #[cfg(test)]
 mod tokio_tests {
+    use std::time::Duration;
+
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
@@ -433,11 +437,64 @@ mod tokio_tests {
                 .expect("join error");
         }
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn clone_monster() {
+        for cap in capacity_iter() {
+            // SimpleLogger::new()
+            //     .with_level(LevelFilter::Warn)
+            //     .init()
+            //     .unwrap();
+
+            let (tx, mut rx) = super::channel(cap);
+            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx2.send(message).await.expect("send failed");
+                }
+
+                barrier.send(()).await.expect("clone task shutdown failed");
+            });
+
+            spawn(async move {
+                loop {
+                    if let Ok(_) = sender_quit.try_recv() {
+                        break;
+                    }
+
+                    let tx2 = tx.clone();
+                    drop(tx2);
+
+                    tokio::time::sleep(Duration::from_micros(50)).await;
+                }
+            });
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
+                }
+            });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout")
+                .expect("join failed");
+        }
+    }
 }
 
 #[cfg(test)]
 mod async_std_tests {
-    use async_std::{future::timeout, task::spawn};
+    use std::time::Duration;
+
+    use async_std::{
+        future::timeout,
+        task::{self, spawn},
+    };
 
     use crate::{
         test::{capacity_iter, Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
@@ -486,6 +543,49 @@ mod async_std_tests {
 
             let rx_handle = spawn(async move {
                 let mut channel = Channels::new(CHANNEL_TEST_SENDERS);
+                while let Some(message) = rx.recv().await {
+                    channel.assert_message(&message);
+                }
+            });
+
+            timeout(TEST_TIMEOUT, rx_handle)
+                .await
+                .expect("test timeout");
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn clone_monster() {
+        // crate::logging::enable_log();
+
+        for cap in capacity_iter() {
+            let (tx, mut rx) = super::channel(cap);
+            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+
+            let mut tx2 = tx.clone();
+            spawn(async move {
+                for message in Message::new_iter(0) {
+                    tx2.send(message).await.expect("send failed");
+                }
+
+                barrier.send(()).await.expect("clone task shutdown failed");
+            });
+
+            spawn(async move {
+                loop {
+                    if let Ok(_) = sender_quit.try_recv() {
+                        break;
+                    }
+
+                    let tx2 = tx.clone();
+                    drop(tx2);
+                    task::sleep(Duration::from_micros(50)).await;
+                }
+            });
+
+            let rx_handle = spawn(async move {
+                let mut channel = Channel::new(0);
+
                 while let Some(message) = rx.recv().await {
                     channel.assert_message(&message);
                 }

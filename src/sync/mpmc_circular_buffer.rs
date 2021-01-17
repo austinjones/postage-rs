@@ -1,9 +1,9 @@
 use std::{
     cmp::max,
-    sync::atomic::{AtomicBool, AtomicUsize},
+    sync::{atomic::AtomicUsize, Mutex},
 };
 
-use atomic::{Atomic, Ordering};
+use atomic::Ordering;
 use std::task::Context;
 
 use super::{
@@ -18,8 +18,9 @@ use std::fmt::Debug;
 
 pub struct MpmcCircularBuffer<T> {
     buffer: Box<[ReadReleaseLock<T>]>,
-    head_lock: AtomicBool,
+    head_lock: Mutex<()>,
     head: AtomicUsize,
+    tail_lock: Mutex<()>,
     tail: AtomicUsize,
 }
 
@@ -49,13 +50,14 @@ where
         let this = Self {
             buffer: vec.into_boxed_slice(),
             head: AtomicUsize::new(0),
-            head_lock: AtomicBool::new(false),
+            head_lock: Mutex::new(()),
             tail: AtomicUsize::new(0),
+            tail_lock: Mutex::new(()),
         };
 
         let reader = BufferReader {
-            index: AtomicUsize::new(0),
-            state: Atomic::new(ReaderState::Reading),
+            index: 0,
+            state: ReaderState::Blocked,
         };
 
         this.buffer[0].acquire();
@@ -75,35 +77,51 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn try_write(&self, value: T, cx: &Context<'_>) -> TryWrite<T> {
-        loop {
-            if let Ok(_e) =
-                self.head_lock
-                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                break;
-            }
-        }
-
+        let head_lock = self.head_lock.lock().unwrap();
         let head_id = self.head.load(Ordering::SeqCst);
         let next_id = head_id + 1;
         let head_slot = self.get_slot(head_id);
 
-        match head_slot.try_write(value, cx, || {
+        match head_slot.try_write(value, cx, move || {
             self.head.store(next_id, Ordering::SeqCst);
-            self.head_lock.store(false, Ordering::Release);
+            drop(head_lock);
         }) {
             rr_lock::TryWrite::Ready => {
-                #[cfg(feature = "logging")]
-                log::trace!("Write {} complete: {:?}", head_id, head_slot);
+                #[cfg(feature = "debug")]
+                {
+                    // the head is writing into the tail slot
+                    // the reader thread is *at* the tail slot
+                    let tail = self.tail.load(Ordering::Acquire);
+                    let tail_distance = head_id - tail;
+                    if tail_distance >= self.buffer.len() {
+                        let head_slot = head_id % self.len();
+                        let tail_slot = head_id % self.len();
+                        log::error!(
+                            "[{}] Write clobbered current tail {} (slot {} / {})",
+                            head_id,
+                            tail,
+                            head_slot,
+                            tail_slot
+                        );
+                    }
+                }
+
+                let slot_index = head_id % self.len();
+                #[cfg(feature = "debug")]
+                log::warn!(
+                    "[{}] Write complete in slot {}, head incremented from {} to {}",
+                    head_id,
+                    slot_index,
+                    head_id,
+                    next_id
+                );
 
                 return TryWrite::Ready;
             }
             rr_lock::TryWrite::Pending(v) => {
-                self.head_lock.store(false, Ordering::Release);
-
-                #[cfg(feature = "logging")]
-                log::trace!(
-                    "Write {} pending, slot is reading: {:?}",
+                #[cfg(feature = "debug")]
+                log::debug!(
+                    "[{}] Write pending, slot is reading: {:?}",
                     head_id,
                     head_slot
                 );
@@ -113,21 +131,19 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        let index = loop {
-            let index = self.head.load(Ordering::SeqCst);
-            let slot = self.get_slot(index);
+        let head_lock = self.head_lock.lock().unwrap();
+        let index = self.head.load(Ordering::SeqCst);
+        let slot = self.get_slot(index);
 
-            slot.acquire();
-            if index == self.head.load(Ordering::SeqCst) {
-                break index;
-            }
+        slot.acquire_next();
+        drop(head_lock);
 
-            slot.decrement();
-        };
+        #[cfg(feature = "debug")]
+        log::info!("[{}] New reader", index);
 
         BufferReader {
-            index: AtomicUsize::new(index),
-            state: Atomic::new(ReaderState::Reading),
+            index,
+            state: ReaderState::Blocked,
         }
     }
 
@@ -135,12 +151,34 @@ impl<T> MpmcCircularBuffer<T> {
         let index = id % self.len();
         &self.buffer[index]
     }
+
+    fn release_tail(&self) {
+        let _tail_lock = self.head_lock.lock().unwrap();
+        loop {
+            // let _head_lock = self.head_lock.lock().unwrap();
+
+            let tail = self.tail.load(Ordering::Acquire);
+            let slot = self.get_slot(tail);
+            if let TryDecrement::Alive(_) = slot.release() {
+                return;
+            }
+
+            self.tail.store(tail + 1, Ordering::Release);
+            #[cfg(feature = "debug")]
+            log::warn!(
+                "[{}] Released slot, tail incremented from {} to {}",
+                tail,
+                tail,
+                tail + 1
+            );
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct BufferReader {
-    index: AtomicUsize,
-    state: Atomic<ReaderState>,
+    index: usize,
+    state: ReaderState,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -157,22 +195,24 @@ pub enum TryRead<T> {
 }
 
 impl BufferReader {
-    pub fn try_read<T>(&self, buffer: &MpmcCircularBuffer<T>, cx: &Context<'_>) -> TryRead<T>
+    pub fn try_read<T>(&mut self, buffer: &MpmcCircularBuffer<T>, cx: &Context<'_>) -> TryRead<T>
     where
         T: Clone,
     {
-        match self.state.load(Ordering::Acquire) {
+        let index = self.index;
+
+        match self.state {
             ReaderState::Blocked => {
-                let index = self.index.load(Ordering::Acquire);
+                let head_lock = buffer.head_lock.lock().unwrap();
                 let head = buffer.head.load(Ordering::Acquire);
 
                 if index >= head {
                     let slot = buffer.get_slot(index);
                     slot.subscribe_write(cx);
 
-                    #[cfg(feature = "logging")]
-                    log::trace!(
-                        "TryRead {} still blocked on head {}, slot: {:?}",
+                    #[cfg(feature = "debug")]
+                    log::debug!(
+                        "[{}] TryRead still blocked on head {}, slot: {:?}",
                         index,
                         head,
                         slot
@@ -181,36 +221,46 @@ impl BufferReader {
                     return TryRead::Pending;
                 }
 
-                #[cfg(feature = "logging")]
-                log::trace!("TryRead {} un-blocked", index);
+                #[cfg(feature = "debug")]
+                log::debug!("[{}] TryRead un-blocked", index);
 
-                self.state.store(ReaderState::Reading, Ordering::Release);
+                self.state = ReaderState::Reading;
             }
             ReaderState::Reading => {}
         }
 
-        let index = self.index.load(Ordering::Acquire);
         let slot = buffer.get_slot(index);
 
-        // #[cfg(feature = "logging")]
+        // #[cfg(feature = "debug")]
         // trace!("TryRead {}, slot: {:?}", index, slot);
 
         match slot.try_read(cx) {
             rr_lock::TryRead::NotLocked => {
-                panic!("MPMC slot {} not locked! {:?}", index, slot);
+                panic!("[{}] MPMC slot not locked! {:?}", index, slot);
             }
             rr_lock::TryRead::Read(value) => {
+                let head = buffer.head.load(Ordering::Acquire);
+                if index >= head {
+                    #[cfg(feature = "debug")]
+                    log::error!(
+                        "[{}] Value was read, but head {} advanced during read.",
+                        index,
+                        head
+                    );
+
+                    return TryRead::Pending;
+                }
                 self.advance(index, buffer, cx);
                 self.release(index, buffer);
 
-                #[cfg(feature = "logging")]
-                log::trace!("Read {} complete, slot: {:?}", index, slot);
+                #[cfg(feature = "debug")]
+                log::debug!("[{}] Read complete", index);
 
                 return TryRead::Ready(value);
             }
             rr_lock::TryRead::Pending => {
-                #[cfg(feature = "logging")]
-                log::trace!("Read {} pending, slot: {:?}", index, slot);
+                #[cfg(feature = "debug")]
+                log::debug!("[{}] Read pending", index);
                 return TryRead::Pending;
             }
         }
@@ -218,110 +268,92 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
-        let index = loop {
-            let index = self.index.load(Ordering::Acquire);
-
+        let (index, state) = loop {
+            let index = self.index;
+            let state = self.state;
             let slot = buffer.get_slot(index);
-            slot.acquire();
 
-            if index != self.index.load(Ordering::Acquire) {
-                slot.decrement();
-                continue;
+            let head_lock = buffer.head_lock.lock().unwrap();
+            let head = buffer.head.load(Ordering::Acquire);
+
+            if index >= head {
+                slot.acquire_next();
+            } else {
+                slot.acquire();
             }
 
-            break index;
+            drop(head_lock);
+
+            break (index, state);
         };
 
-        BufferReader {
-            index: AtomicUsize::new(index),
-            state: Atomic::new(self.state.load(Ordering::Acquire)),
-        }
+        #[cfg(feature = "debug")]
+        log::error!("[{}] Cloned reader, state {:?}", index, state);
+
+        BufferReader { index, state }
     }
 
     pub fn drop<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
-        if let ReaderState::Blocked = self.state.load(Ordering::Acquire) {
-            let slot = buffer.get_slot(self.index.load(Ordering::Acquire));
-            slot.decrement_next();
+        let index = self.index;
+        if let ReaderState::Blocked = self.state {
+            #[cfg(feature = "debug")]
+            log::error!("[{}] Dropping blocked reader", index);
+            let head_lock = buffer.head_lock.lock().unwrap();
+            let head = buffer.head.load(Ordering::Acquire);
+
+            if index < head {
+                drop(head_lock);
+                // the head has advanced, and the reader is unblocked
+                // decrement the read lock
+                self.release(index, buffer);
+            } else {
+                // otherwise, decrement the lock on the next item in the slot
+                let slot = buffer.get_slot(index);
+                slot.decrement_next();
+            }
         } else {
-            let id = self.index.load(Ordering::Acquire);
-            self.release(id, buffer);
+            #[cfg(feature = "debug")]
+            log::error!("[{}] Dropping reader", index);
+            self.release(index, buffer);
         }
     }
 
-    fn advance<T>(&self, id: usize, buffer: &MpmcCircularBuffer<T>, cx: &Context<'_>) {
+    fn advance<T>(&mut self, id: usize, buffer: &MpmcCircularBuffer<T>, cx: &Context<'_>) {
         let slot = buffer.get_slot(id);
         let next_id = id + 1;
         let next_slot = buffer.get_slot(next_id);
 
-        loop {
-            if let Ok(_e) =
-                buffer
-                    .head_lock
-                    .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                break;
-            }
-        }
+        let head_lock = buffer.head_lock.lock().unwrap();
 
         let head_id = buffer.head.load(Ordering::Acquire);
 
         if next_id >= head_id {
             next_slot.acquire_next();
-            buffer.head_lock.store(false, Ordering::Release);
+            drop(head_lock);
 
             // if head_id != buffer.head.load(Ordering::Acquire) {
             //     next_slot.decrement_next();
             //     continue;
             // }
 
-            self.state.store(ReaderState::Blocked, Ordering::Release);
+            self.state = ReaderState::Blocked;
             slot.subscribe_write(cx);
-            #[cfg(feature = "logging")]
-            log::trace!("Reader blocked at slot {}, head is {}", next_id, head_id);
+            #[cfg(feature = "debug")]
+            log::info!("[{}] Reader blocked, head is {}", next_id, head_id);
         } else {
             buffer.get_slot(next_id).acquire();
-            buffer.head_lock.store(false, Ordering::Release);
+            drop(head_lock);
         }
         // }
 
         // self.index.fetch_add(1, Ordering::AcqRel);
-        self.index
-            .compare_exchange(id, next_id, Ordering::AcqRel, Ordering::Relaxed)
-            .unwrap();
+        self.index = next_id;
     }
 
-    fn release<T>(&self, id: usize, buffer: &MpmcCircularBuffer<T>) {
-        let slot = buffer.get_slot(id);
-        match slot.decrement() {
-            TryDecrement::Alive => {
-                #[cfg(feature = "logging")]
-                log::trace!("Read {} decremented", id);
-            }
-            TryDecrement::Dead => {
-                let tail = buffer.tail.load(Ordering::Acquire);
-                if id == tail {
-                    match slot.release() {
-                        TryDecrement::Alive => {
-                            return;
-                        }
-                        TryDecrement::Dead => {}
-                    }
-                    // .expect_dead("reader added to tail slot after slot became dead");
-
-                    buffer.tail.store(tail + 1, Ordering::Release);
-
-                    #[cfg(feature = "logging")]
-                    log::trace!(
-                        "Read {} released, tail incremented from {} to {}",
-                        id,
-                        tail,
-                        tail + 1
-                    );
-                } else {
-                    #[cfg(feature = "logging")]
-                    log::trace!("Read {} decremented to 0 (not tail {})", id, tail);
-                }
-            }
+    fn release<T>(&self, index: usize, buffer: &MpmcCircularBuffer<T>) {
+        let slot = buffer.get_slot(index);
+        if let TryDecrement::Dead = slot.decrement() {
+            buffer.release_tail();
         }
     }
 }

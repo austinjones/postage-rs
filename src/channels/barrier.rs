@@ -11,6 +11,8 @@ use crate::{sync::notifier::Notifier, PollRecv, PollSend, Sink, Stream};
 
 /// Constructs a pair of barrier endpoints
 pub fn channel() -> (Sender, Receiver) {
+    #[cfg(feature = "debug")]
+    log::error!("Creating barrier channel");
     let shared = Arc::new(Shared {
         state: Atomic::new(State::Pending),
         notify_rx: Notifier::new(),

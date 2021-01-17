@@ -6,7 +6,7 @@ pub struct RefCount {
 }
 
 pub enum TryDecrement {
-    Alive,
+    Alive(usize),
     Dead,
 }
 
@@ -14,7 +14,7 @@ impl TryDecrement {
     #[allow(dead_code)]
     #[track_caller]
     pub fn expect_dead(&self, message: &str) {
-        if let Self::Alive = self {
+        if let Self::Alive(_) = self {
             panic!("TryDecrement unwrapped on an Alive value: {}", message);
         }
     }
@@ -62,7 +62,7 @@ impl RefCount {
                 if state == 1 {
                     return TryDecrement::Dead;
                 } else {
-                    return TryDecrement::Alive;
+                    return TryDecrement::Alive(state - 1);
                 }
             }
         }

@@ -14,11 +14,11 @@ impl Notifier {
 
     pub fn notify(&self) {
         let mut wakers = self.wakers.lock().unwrap();
-        #[cfg(feature = "logging")]
+        #[cfg(feature = "debug")]
         let mut woken = 0usize;
 
         while let Some(waker) = wakers.pop_back() {
-            #[cfg(feature = "logging")]
+            #[cfg(feature = "debug")]
             {
                 woken += 1;
             }
@@ -26,8 +26,8 @@ impl Notifier {
             waker.wake();
         }
 
-        #[cfg(feature = "logging")]
-        log::trace!("Woke {} tasks", woken);
+        #[cfg(feature = "debug")]
+        log::debug!("Woke {} tasks", woken);
     }
 
     pub fn subscribe(&self, waker: Waker) {
