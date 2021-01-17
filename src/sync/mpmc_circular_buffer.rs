@@ -130,6 +130,7 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
+        // let head = self.head.write().unwrap();
         self.readers.fetch_add(1, Ordering::AcqRel);
         let index = *self.head.read().unwrap();
 
@@ -193,7 +194,7 @@ impl BufferReader {
             }
             TryRead::Pending => {
                 #[cfg(feature = "debug")]
-                log::debug!("[{}] Read pending", index);
+                log::debug!("[{}] Read pending, slot: {:?}", index, slot);
             }
         }
 
@@ -202,6 +203,7 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
+        // let _head = buffer.head.write().unwrap();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
         let index = self.index;
@@ -214,17 +216,20 @@ impl BufferReader {
     }
 
     pub fn drop<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
+        // let _head = buffer.head.write().unwrap();
         buffer.readers.fetch_sub(1, Ordering::AcqRel);
 
-        for slot in buffer.buffer.iter() {
+        for (_id, slot) in buffer.buffer.iter().enumerate() {
             let readers = buffer.readers.load(Ordering::Acquire);
 
             #[cfg(feature = "debug")]
             log::debug!(
-                "[{}] Dropping reader, notifying slot with reads {:?} of new reader count {}",
+                "[{}] Dropping reader, notifying slot {} with reads {:?} of new reader count [{}/{:?}]",
                 self.index,
+                _id,
                 slot.reads,
-                readers
+                readers,
+                buffer.readers,
             );
 
             slot.decrement_read_in_range(0, self.index);
@@ -292,7 +297,8 @@ impl<T> Slot<T> {
     }
 
     fn mark_read_in_range(&self, min: usize, max: usize, readers: usize) {
-        // let _lock = self.data.read().unwrap();
+        // prevent the index from changing while maintenance is performed
+        let _read = self.data.read().unwrap();
         let index = self.index.load(Ordering::Acquire);
         if index >= min && index < max {
             let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
@@ -312,6 +318,8 @@ impl<T> Slot<T> {
     }
 
     fn decrement_read_in_range(&self, min: usize, max: usize) {
+        // prevent the index from changing while maintenance is performed
+        let _read = self.data.read().unwrap();
         let index = self.index.load(Ordering::Acquire);
         if index >= min && index < max {
             loop {
@@ -340,7 +348,6 @@ impl<T> Slot<T> {
     }
 
     fn notify_readers_decreased(&self, readers: usize) {
-        // let _lock = self.data.read().unwrap();
         if self.reads.load(Ordering::Acquire) >= readers {
             self.on_release.notify();
         }

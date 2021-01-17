@@ -917,12 +917,12 @@ mod tokio_tests {
                         break;
                     }
 
-                    // let tx3 = tx.clone();
-                    // let rx3 = rx2.clone();
+                    let tx3 = tx.clone();
+                    let rx3 = rx2.clone();
                     let rx4 = tx.subscribe();
-                    time::sleep(Duration::from_micros(1000)).await;
-                    // drop(tx3);
-                    // drop(rx3);
+                    time::sleep(Duration::from_micros(100)).await;
+                    drop(tx3);
+                    drop(rx3);
                     drop(rx4);
                     time::sleep(Duration::from_micros(50)).await;
                 }
@@ -1102,7 +1102,7 @@ mod async_std_tests {
         }
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[async_std::test]
     async fn clone_monster() {
         // crate::logging::enable_log();
 
@@ -1121,7 +1121,6 @@ mod async_std_tests {
 
             let mut rx2 = rx.clone();
             spawn(async move {
-                let mut pending = 0;
                 loop {
                     let next = rx2.try_recv();
 
@@ -1137,16 +1136,11 @@ mod async_std_tests {
                         break;
                     }
 
-                    if pending > 10 {
-                        break;
-                    }
-
-                    pending += 1;
-
-                    // let tx3 = tx.clone();
+                    let tx3 = tx.clone();
                     let rx3 = rx2.clone();
                     let rx4 = tx.subscribe();
-                    // drop(tx3);
+                    task::sleep(Duration::from_micros(100)).await;
+                    drop(tx3);
                     drop(rx3);
                     drop(rx4);
                     task::sleep(Duration::from_micros(50)).await;

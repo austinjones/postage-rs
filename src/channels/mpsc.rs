@@ -472,6 +472,7 @@ mod tokio_tests {
                     }
 
                     let tx2 = tx.clone();
+                    tokio::time::sleep(Duration::from_micros(100)).await;
                     drop(tx2);
 
                     tokio::time::sleep(Duration::from_micros(50)).await;
@@ -585,6 +586,7 @@ mod async_std_tests {
                     }
 
                     let tx2 = tx.clone();
+                    task::sleep(Duration::from_micros(100)).await;
                     drop(tx2);
                     task::sleep(Duration::from_micros(50)).await;
                 }

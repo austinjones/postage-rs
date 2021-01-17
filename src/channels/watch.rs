@@ -86,14 +86,16 @@ where
     ) -> crate::PollRecv<Self::Item> {
         match self.try_recv_internal() {
             TryRecv::Pending => {
-                if self.shared.is_closed() {
-                    return PollRecv::Closed;
-                }
-
                 self.shared.subscribe_send(cx.waker().clone());
 
                 match self.try_recv_internal() {
-                    TryRecv::Pending => PollRecv::Pending,
+                    TryRecv::Pending => {
+                        if self.shared.is_closed() {
+                            return PollRecv::Closed;
+                        }
+
+                        PollRecv::Pending
+                    }
                     TryRecv::Ready(v) => PollRecv::Ready(v),
                 }
             }

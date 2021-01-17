@@ -27,7 +27,9 @@ impl Notifier {
         }
 
         #[cfg(feature = "debug")]
-        log::debug!("Woke {} tasks", woken);
+        if woken > 0 {
+            log::info!("Woke {} tasks", woken);
+        }
     }
 
     pub fn subscribe(&self, waker: Waker) {
