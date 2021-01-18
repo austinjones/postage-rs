@@ -2,7 +2,7 @@ use std::{cell::UnsafeCell, pin::Pin};
 
 use atomic::{Atomic, Ordering};
 
-use crate::{PollRecv, Stream};
+use crate::stream::{PollRecv, Stream};
 
 use crate::Context;
 #[derive(Copy, Clone)]
@@ -28,7 +28,7 @@ impl<T> OnceStream<T> {
 impl<T> Stream for OnceStream<T> {
     type Item = T;
 
-    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         if let Ok(_) = self.state.compare_exchange(
             State::Ready,
             State::Taken,
@@ -44,5 +44,24 @@ impl<T> Stream for OnceStream<T> {
         }
 
         PollRecv::Closed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::{
+        stream::{PollRecv, Stream},
+        Context,
+    };
+
+    #[test]
+    fn test() {
+        let mut repeat = crate::stream::once(1usize);
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut repeat).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut repeat).poll_recv(&mut cx));
     }
 }

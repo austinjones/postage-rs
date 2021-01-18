@@ -1,4 +1,4 @@
-use crate::{PollSend, Sink};
+use crate::sink::{PollSend, Sink};
 use log::log_enabled;
 use pin_project::pin_project;
 use std::{fmt::Debug, pin::Pin};
@@ -28,7 +28,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         let this = self.project();
         let level = *this.level;
 

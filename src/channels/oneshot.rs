@@ -4,7 +4,11 @@ use std::sync::Arc;
 
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
-use crate::{sync::transfer::Transfer, PollSend, Sink, Stream};
+use crate::{
+    sink::{PollSend, Sink},
+    stream::{PollRecv, Stream},
+    sync::transfer::Transfer,
+};
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
@@ -35,7 +39,7 @@ impl<T> Sink for Sender<T> {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         match self.shared.send(value) {
             Ok(_) => PollSend::Ready,
             Err(v) => PollSend::Rejected(v),
@@ -63,7 +67,7 @@ impl<T> Stream for Receiver<T> {
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    ) -> PollRecv<Self::Item> {
         self.shared.recv(cx)
     }
 }
@@ -78,8 +82,11 @@ impl<T> Drop for Receiver<T> {
 mod tests {
     use std::{pin::Pin, task::Context};
 
-    use crate::test::{noop_context, panic_context};
-    use crate::{PollRecv, PollSend, Sink, Stream};
+    use crate::{
+        sink::{PollSend, Sink},
+        stream::{PollRecv, Stream},
+        test::{noop_context, panic_context},
+    };
     use futures_test::task::new_count_waker;
 
     use super::channel;
@@ -198,8 +205,9 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{CHANNEL_TEST_ITERATIONS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     use super::channel;
@@ -225,8 +233,9 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{CHANNEL_TEST_ITERATIONS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     use super::channel;

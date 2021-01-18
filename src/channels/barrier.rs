@@ -7,7 +7,11 @@ use std::sync::Arc;
 use atomic::{Atomic, Ordering};
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
-use crate::{sync::notifier::Notifier, PollRecv, PollSend, Sink, Stream};
+use crate::{
+    sink::{PollSend, Sink},
+    stream::{PollRecv, Stream},
+    sync::notifier::Notifier,
+};
 
 /// Constructs a pair of barrier endpoints
 pub fn channel() -> (Sender, Receiver) {
@@ -44,7 +48,7 @@ impl Sink for Sender {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut crate::Context<'_>,
         _value: (),
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         match self.shared.state.load(Ordering::Acquire) {
             State::Pending => {
                 self.shared.close();
@@ -93,7 +97,7 @@ impl Stream for Receiver {
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    ) -> PollRecv<Self::Item> {
         match self.shared.state.load(Ordering::Acquire) {
             State::Pending => {
                 self.shared.notify_rx.subscribe(cx);
@@ -108,8 +112,11 @@ impl Stream for Receiver {
 mod tests {
     use std::{pin::Pin, task::Context};
 
-    use crate::test::{noop_context, panic_context};
-    use crate::{PollRecv, PollSend, Sink, Stream};
+    use crate::{
+        sink::{PollSend, Sink},
+        stream::{PollRecv, Stream},
+        test::{noop_context, panic_context},
+    };
     use futures_test::task::new_count_waker;
 
     use super::channel;
@@ -249,8 +256,9 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{CHANNEL_TEST_ITERATIONS, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     use super::Receiver;
@@ -319,8 +327,9 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{CHANNEL_TEST_ITERATIONS, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     use super::Receiver;

@@ -5,8 +5,9 @@ use crossbeam_queue::ArrayQueue;
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{
+    sink::{PollSend, Sink},
+    stream::{PollRecv, Stream},
     sync::{shared, ReceiverShared, SenderShared},
-    PollRecv, PollSend, Sink, Stream,
 };
 
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
@@ -44,7 +45,7 @@ impl<T> Sink for Sender<T> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
         value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         if self.shared.is_closed() {
             return PollSend::Rejected(value);
         }
@@ -87,7 +88,7 @@ impl<T> Stream for Receiver<T> {
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    ) -> PollRecv<Self::Item> {
         match self.shared.extension().queue.pop() {
             Some(v) => {
                 self.shared.notify_senders();
@@ -133,8 +134,11 @@ impl<T> StateExtension<T> {
 mod tests {
     use std::{pin::Pin, task::Context};
 
-    use crate::test::{noop_context, panic_context};
-    use crate::{PollRecv, PollSend, Sink, Stream};
+    use crate::{
+        sink::{PollSend, Sink},
+        stream::{PollRecv, Stream},
+        test::{noop_context, panic_context},
+    };
     use futures_test::task::new_count_waker;
 
     use super::{channel, Receiver, Sender};
@@ -385,8 +389,9 @@ mod tokio_tests {
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{capacity_iter, Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     #[tokio::test(flavor = "multi_thread")]
@@ -507,8 +512,9 @@ mod async_std_tests {
     };
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{capacity_iter, Channel, Channels, Message, CHANNEL_TEST_SENDERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     #[async_std::test]

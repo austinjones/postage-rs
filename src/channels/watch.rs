@@ -17,8 +17,9 @@ use std::{
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{
+    sink::{PollSend, Sink},
+    stream::{PollRecv, Stream},
     sync::{shared, ReceiverShared, SenderShared},
-    PollRecv, PollSend, Sink, Stream,
 };
 
 /// Constructs a new watch channel pair, filled with T::default()
@@ -52,7 +53,7 @@ impl<T> Sink for Sender<T> {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         if self.shared.is_closed() {
             return PollSend::Rejected(value);
         }
@@ -83,7 +84,7 @@ where
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    ) -> PollRecv<Self::Item> {
         match self.try_recv_internal() {
             TryRecv::Pending => {
                 self.shared.subscribe_send(cx);
@@ -187,8 +188,11 @@ mod tests {
     use std::{pin::Pin, task::Context};
 
     use super::channel;
-    use crate::test::{noop_context, panic_context};
-    use crate::{PollRecv, PollSend, Sink, Stream};
+    use crate::{
+        sink::{PollSend, Sink},
+        stream::{PollRecv, Stream},
+        test::{noop_context, panic_context},
+    };
     use futures_test::task::new_count_waker;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
@@ -389,8 +393,9 @@ mod tokio_tests {
     use tokio::{spawn, time::timeout};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     #[tokio::test]
@@ -455,8 +460,9 @@ mod async_std_tests {
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
+        sink::Sink,
+        stream::Stream,
         test::{Channel, Channels, Message, CHANNEL_TEST_RECEIVERS, TEST_TIMEOUT},
-        Sink, Stream,
     };
 
     #[async_std::test]

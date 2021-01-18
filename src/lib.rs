@@ -18,8 +18,8 @@ mod channels;
 #[macro_use]
 mod logging;
 mod context;
-mod sink;
-mod stream;
+pub mod sink;
+pub mod stream;
 mod sync;
 
 pub use channels::barrier;
@@ -29,9 +29,6 @@ pub use channels::oneshot;
 pub use channels::watch;
 
 pub use context::Context;
-
-pub use sink::*;
-pub use stream::*;
 
 #[cfg(test)]
 mod test;

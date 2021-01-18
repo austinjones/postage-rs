@@ -33,6 +33,7 @@ impl<'a> Context<'a> {
         Context { waker: Some(waker) }
     }
 
+    /// Create an empty context with no waker.
     pub fn empty() -> Self {
         Self { waker: None }
     }

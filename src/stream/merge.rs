@@ -1,4 +1,4 @@
-use crate::{PollRecv, Stream};
+use crate::stream::{PollRecv, Stream};
 use pin_project::pin_project;
 use std::pin::Pin;
 
@@ -48,7 +48,7 @@ where
 {
     type Item = Left::Item;
 
-    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         let this = self.project();
 
         let poll = match this.state {
@@ -96,5 +96,98 @@ where
         PollRecv::Ready(v) => MergePoll::First(PollRecv::Ready(v)),
         PollRecv::Pending => MergePoll::Second(second.poll_recv(cx)),
         PollRecv::Closed => MergePoll::Second(second.poll_recv(cx)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::test::stream::*;
+    use crate::{
+        stream::{PollRecv, Stream},
+        Context,
+    };
+
+    use super::MergeStream;
+
+    #[test]
+    fn simple_merge() {
+        let left = from_poll_iter(vec![PollRecv::Ready(1), PollRecv::Ready(3)]);
+        let right = from_poll_iter(vec![PollRecv::Ready(2), PollRecv::Ready(4)]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(3), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(4), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn swap_ready() {
+        let left = from_poll_iter(vec![PollRecv::Ready(1), PollRecv::Ready(3)]);
+        let right = from_poll_iter(vec![PollRecv::Ready(2)]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(3), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn swap_pending() {
+        let left = from_poll_iter(vec![PollRecv::Pending, PollRecv::Ready(2)]);
+        let right = from_poll_iter(vec![PollRecv::Ready(1)]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn swap_closed() {
+        let left = from_poll_iter(vec![PollRecv::Closed, PollRecv::Closed]);
+        let right = from_poll_iter(vec![PollRecv::Ready(1), PollRecv::Ready(2)]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn pending_uses_right() {
+        let left = from_poll_iter(vec![PollRecv::Pending]);
+        let right = from_poll_iter(vec![PollRecv::Ready(1)]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn pending_uses_left() {
+        let left = from_poll_iter(vec![PollRecv::Ready(1)]);
+        let right = from_poll_iter(vec![PollRecv::Pending]);
+        let mut find = MergeStream::new(left, right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
     }
 }

@@ -64,6 +64,10 @@ impl<E> SenderShared<E> {
         self.inner.receiver_notify.notify();
     }
 
+    pub fn notify_self(&self) {
+        self.inner.sender_notify.notify();
+    }
+
     pub fn subscribe_recv(&self, cx: &Context<'_>) {
         self.inner.sender_notify.subscribe(cx);
     }

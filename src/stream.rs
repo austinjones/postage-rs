@@ -61,19 +61,6 @@ pub trait Stream {
         }
     }
 
-    /// Returns a stream which produces a single value, and then is closed.
-    fn once(item: Self::Item) -> OnceStream<Self::Item> {
-        OnceStream::new(item)
-    }
-
-    /// Returns a stream which infiniately produces a clonable value.
-    fn repeat(item: Self::Item) -> RepeatStream<Self::Item>
-    where
-        Self::Item: Clone,
-    {
-        RepeatStream::new(item)
-    }
-
     /// Transforms the stream with a map function.
     fn map<Map, Into>(self, map: Map) -> MapStream<Self, Map, Into>
     where
@@ -155,6 +142,19 @@ where
     }
 }
 
+/// Returns a stream which produces a single value, and then is closed.
+pub fn once<T>(item: T) -> OnceStream<T> {
+    OnceStream::new(item)
+}
+
+/// Returns a stream which infiniately produces a clonable value.
+pub fn repeat<T>(item: T) -> RepeatStream<T>
+where
+    T: Clone,
+{
+    RepeatStream::new(item)
+}
+
 /// An enum of poll responses that are produced by Stream implementations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PollRecv<T> {
@@ -199,7 +199,7 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        let mut cx = cx.into();
+        let mut cx: crate::Context<'_> = cx.into();
         match Pin::new(this.recv).poll_recv(&mut cx) {
             PollRecv::Ready(v) => Poll::Ready(Some(v)),
             PollRecv::Pending => Poll::Pending,

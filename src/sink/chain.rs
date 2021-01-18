@@ -1,5 +1,5 @@
+use crate::sink::{PollSend, Sink};
 use crate::Context;
-use crate::{PollSend, Sink};
 use atomic::{Atomic, Ordering};
 use pin_project::pin_project;
 use std::pin::Pin;
@@ -11,7 +11,7 @@ enum State {
     Closed,
 }
 #[pin_project]
-pub struct SinkChain<Left, Right> {
+pub struct ChainSink<Left, Right> {
     state: Atomic<State>,
 
     #[pin]
@@ -20,7 +20,7 @@ pub struct SinkChain<Left, Right> {
     right: Right,
 }
 
-impl<Left, Right> SinkChain<Left, Right>
+impl<Left, Right> ChainSink<Left, Right>
 where
     Left: Sink,
     Right: Sink<Item = Left::Item>,
@@ -34,7 +34,7 @@ where
     }
 }
 
-impl<Left, Right> Sink for SinkChain<Left, Right>
+impl<Left, Right> Sink for ChainSink<Left, Right>
 where
     Left: Sink,
     Right: Sink<Item = Left::Item>,
@@ -45,7 +45,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         mut value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
         let this = self.project();
         let mut state = this.state.load(Ordering::Acquire);
 
@@ -79,5 +79,97 @@ where
         }
 
         unreachable!();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::test::sink::*;
+    use crate::{
+        sink::{PollSend, Sink},
+        Context,
+    };
+
+    use super::ChainSink;
+
+    #[test]
+    fn simple() {
+        let mut left = test_sink(vec![PollSend::Ready]);
+        let mut right = test_sink(vec![PollSend::Ready]);
+        let mut chain = ChainSink::new(&mut left, &mut right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
+        );
+        assert_eq!(PollSend::Ready, Pin::new(&mut chain).poll_send(&mut cx, 2));
+        assert_eq!(
+            PollSend::Rejected(3),
+            Pin::new(&mut chain).poll_send(&mut cx, 3)
+        );
+
+        drop(chain);
+
+        assert_eq!(&[1], left.values());
+        assert_eq!(&[2], right.values());
+    }
+
+    #[test]
+    fn waits_for_right() {
+        let mut left = test_sink(vec![PollSend::Pending(1)]);
+        let mut right = test_sink(vec![PollSend::Ready]);
+        let mut chain = ChainSink::new(&mut left, &mut right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(
+            PollSend::Pending(1),
+            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
+        );
+        assert_eq!(PollSend::Ready, Pin::new(&mut chain).poll_send(&mut cx, 2));
+        assert_eq!(
+            PollSend::Rejected(3),
+            Pin::new(&mut chain).poll_send(&mut cx, 3)
+        );
+
+        drop(chain);
+
+        assert_eq!(Vec::<usize>::new(), left.values());
+        assert_eq!(&[2], right.values());
+    }
+
+    #[test]
+    fn ignores_after_close() {
+        let mut left = test_sink(vec![PollSend::Rejected(1), PollSend::Ready]);
+        let mut right = test_sink(vec![PollSend::Rejected(1), PollSend::Ready]);
+        let mut chain = ChainSink::new(&mut left, &mut right);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(
+            PollSend::Rejected(1),
+            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
+        );
+        assert_eq!(
+            PollSend::Rejected(2),
+            Pin::new(&mut chain).poll_send(&mut cx, 2)
+        );
+        assert_eq!(
+            PollSend::Rejected(3),
+            Pin::new(&mut chain).poll_send(&mut cx, 3)
+        );
+        assert_eq!(
+            PollSend::Rejected(4),
+            Pin::new(&mut chain).poll_send(&mut cx, 4)
+        );
+
+        drop(chain);
+
+        assert_eq!(Vec::<usize>::new(), left.values());
+        assert_eq!(Vec::<usize>::new(), right.values());
     }
 }

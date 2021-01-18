@@ -53,21 +53,21 @@ pub trait Sink {
 
     /// Chains two sink implementations.  Messages will be transmitted to the argument until it rejects a message.
     /// Then messages will be transmitted to self.
-    fn after<Before>(self, before: Before) -> chain::SinkChain<Before, Self>
+    fn after<Before>(self, before: Before) -> chain::ChainSink<Before, Self>
     where
         Before: Sink<Item = Self::Item>,
         Self: Sized,
     {
-        chain::SinkChain::new(before, self)
+        chain::ChainSink::new(before, self)
     }
 
     /// Filters messages, forwarding them to the sink if the filter returns true
-    fn filter<Filter>(self, filter: Filter) -> filter::SinkFilter<Filter, Self>
+    fn filter<Filter>(self, filter: Filter) -> filter::FilterSink<Filter, Self>
     where
         Filter: FnMut(&Self::Item) -> bool,
         Self: Sized,
     {
-        filter::SinkFilter::new(filter, self)
+        filter::FilterSink::new(filter, self)
     }
 
     /// Logs messages that are accepted by the sink using the Debug trait, at the provided log level.
@@ -121,7 +121,7 @@ pub enum PollSend<T> {
     Ready,
     /// The sender is pending, and has registered with the waker context
     Pending(T),
-    /// The sender has been closed, and cannot send the item
+    /// The sender has been closed, and will never accept the item
     Rejected(T),
 }
 
@@ -166,14 +166,14 @@ where
 
         let this = self.project();
 
-        let mut cx = cx.into();
+        let mut cx: crate::Context<'_> = cx.into();
         match this.send.poll_send(&mut cx, this.value.take().unwrap()) {
-            crate::PollSend::Ready => Poll::Ready(Ok(())),
-            crate::PollSend::Pending(value) => {
+            PollSend::Ready => Poll::Ready(Ok(())),
+            PollSend::Pending(value) => {
                 *this.value = Some(value);
                 Poll::Pending
             }
-            crate::PollSend::Rejected(value) => Poll::Ready(Err(SendError(value))),
+            PollSend::Rejected(value) => Poll::Ready(Err(SendError(value))),
         }
     }
 }
