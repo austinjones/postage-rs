@@ -1,9 +1,10 @@
-use std::{cell::UnsafeCell, pin::Pin, task::Context};
+use std::{cell::UnsafeCell, pin::Pin};
 
 use atomic::{Atomic, Ordering};
 
 use crate::{PollRecv, Stream};
 
+use crate::Context;
 #[derive(Copy, Clone)]
 enum State {
     Ready,

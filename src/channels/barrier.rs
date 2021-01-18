@@ -108,8 +108,9 @@ impl Stream for Receiver {
 mod tests {
     use std::{pin::Pin, task::Context};
 
+    use crate::test::{noop_context, panic_context};
     use crate::{PollRecv, PollSend, Sink, Stream};
-    use futures_test::task::{new_count_waker, noop_context, panic_context};
+    use futures_test::task::new_count_waker;
 
     use super::channel;
 
@@ -200,11 +201,11 @@ mod tests {
         let (mut tx, mut rx) = channel();
 
         let (w, w_count) = new_count_waker();
-        let mut w_context = Context::from_waker(&w);
+        let w_context = Context::from_waker(&w);
 
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w_context)
+            Pin::new(&mut rx).poll_recv(&mut w_context.into())
         );
 
         assert_eq!(0, w_count.get());
@@ -226,11 +227,11 @@ mod tests {
         let (tx, mut rx) = channel();
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context)
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
         );
 
         assert_eq!(0, w1_count.get());

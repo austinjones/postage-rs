@@ -9,6 +9,12 @@ pub struct Context<'a> {
     waker: Option<&'a Waker>,
 }
 
+impl<'a> From<std::task::Context<'a>> for Context<'a> {
+    fn from(cx: std::task::Context<'a>) -> Self {
+        Self::from_waker(cx.waker())
+    }
+}
+
 impl<'a> From<&std::task::Context<'a>> for Context<'a> {
     fn from(cx: &std::task::Context<'a>) -> Self {
         Self::from_waker(cx.waker())

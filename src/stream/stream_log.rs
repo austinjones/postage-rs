@@ -1,6 +1,6 @@
-use crate::{PollRecv, Stream};
+use crate::{Context, PollRecv, Stream};
 use pin_project::pin_project;
-use std::{fmt::Debug, pin::Pin, task::Context};
+use std::{fmt::Debug, pin::Pin};
 
 use log::log;
 #[pin_project]

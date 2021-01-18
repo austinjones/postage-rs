@@ -1,7 +1,8 @@
-use std::{pin::Pin, task::Context};
+use std::pin::Pin;
 
 use atomic::{Atomic, Ordering};
 
+use crate::Context;
 use crate::{PollRecv, Stream};
 use pin_project::pin_project;
 

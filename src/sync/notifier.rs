@@ -32,9 +32,9 @@ impl Notifier {
         }
     }
 
-    pub fn subscribe(&self, cx: &crate::Context) {
+    pub fn subscribe(&self, cx: &crate::Context<'_>) {
         if let Some(waker) = cx.waker() {
-            self.wakers.push(waker);
+            self.wakers.push(waker.clone());
         }
     }
 }

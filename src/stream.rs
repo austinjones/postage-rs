@@ -1,7 +1,6 @@
 use std::{future::Future, marker::PhantomPinned, ops::DerefMut, pin::Pin};
 
 use crate::Context;
-use futures_task::noop_waker;
 use pin_project::pin_project;
 use std::task::Poll;
 
@@ -54,10 +53,8 @@ pub trait Stream {
         Self: Unpin,
     {
         let pin = Pin::new(self);
-        let waker = noop_waker();
-        let mut context = Context::from_waker(&waker);
 
-        match pin.poll_recv(&mut context) {
+        match pin.poll_recv(&mut Context::empty()) {
             PollRecv::Ready(value) => Ok(value),
             PollRecv::Pending => Err(TryRecvError::Pending),
             PollRecv::Closed => Err(TryRecvError::Rejected),

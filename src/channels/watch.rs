@@ -50,7 +50,7 @@ impl<T> Sink for Sender<T> {
 
     fn poll_send(
         self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
+        _cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         if self.shared.is_closed() {
@@ -82,11 +82,11 @@ where
 
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut crate::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
         match self.try_recv_internal() {
             TryRecv::Pending => {
-                self.shared.subscribe_send(cx.waker().clone());
+                self.shared.subscribe_send(cx);
 
                 match self.try_recv_internal() {
                     TryRecv::Pending => {
@@ -186,10 +186,10 @@ impl<T> StateExtension<T> {
 mod tests {
     use std::{pin::Pin, task::Context};
 
-    use crate::{PollRecv, PollSend, Sink, Stream};
-    use futures_test::task::{new_count_waker, noop_context, panic_context};
-
     use super::channel;
+    use crate::test::{noop_context, panic_context};
+    use crate::{PollRecv, PollSend, Sink, Stream};
+    use futures_test::task::new_count_waker;
 
     #[derive(Clone, Debug, PartialEq, Eq)]
     struct State(usize);
@@ -332,7 +332,7 @@ mod tests {
         let (mut tx, mut rx) = channel();
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Ready(State(0)),
@@ -340,7 +340,7 @@ mod tests {
         );
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context)
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
         );
 
         assert_eq!(0, w1_count.get());
@@ -365,7 +365,7 @@ mod tests {
         let (tx, mut rx) = channel::<State>();
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Ready(State(0)),
@@ -373,7 +373,7 @@ mod tests {
         );
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context)
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
         );
 
         assert_eq!(0, w1_count.get());

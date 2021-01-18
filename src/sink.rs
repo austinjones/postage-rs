@@ -2,7 +2,6 @@ use std::marker::PhantomPinned;
 use std::{future::Future, ops::DerefMut, pin::Pin, task::Poll};
 
 use crate::Context;
-use futures_task::noop_waker;
 use pin_project::pin_project;
 
 mod chain;
@@ -45,10 +44,7 @@ pub trait Sink {
     {
         let pin = Pin::new(self);
 
-        let waker = noop_waker();
-        let mut context = Context::from_waker(&waker);
-
-        match pin.poll_send(&mut context, value) {
+        match pin.poll_send(&mut Context::empty(), value) {
             PollSend::Ready => Ok(()),
             PollSend::Pending(value) => Err(TrySendError::Pending(value)),
             PollSend::Rejected(value) => Err(TrySendError::Rejected(value)),

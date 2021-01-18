@@ -57,7 +57,7 @@ where
 
     fn poll_send(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> crate::PollSend<Self::Item> {
         if self.shared.is_closed() {
@@ -117,7 +117,7 @@ where
 
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut crate::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
         let buffer = self.shared.extension();
         let mut reader = self.reader.lock().unwrap();
@@ -128,7 +128,7 @@ where
                     return PollRecv::Closed;
                 }
 
-                self.shared.subscribe_send(cx.waker().clone());
+                self.shared.subscribe_send(cx);
                 PollRecv::Pending
             }
             TryRead::Ready(value) => PollRecv::Ready(value),
@@ -161,8 +161,9 @@ impl<T> Drop for Receiver<T> {
 mod tests {
     use std::{pin::Pin, task::Context};
 
+    use crate::test::{noop_context, panic_context};
     use crate::{PollRecv, PollSend, Sink, Stream};
-    use futures_test::task::{new_count_waker, noop_context, panic_context};
+    use futures_test::task::new_count_waker;
 
     use super::{channel, Receiver, Sender};
 
@@ -435,14 +436,14 @@ mod tests {
         );
 
         let (w2, w2_count) = new_count_waker();
-        let mut w2_context = Context::from_waker(&w2);
+        let w2_context = Context::from_waker(&w2);
         assert_eq!(
             PollSend::Ready,
             Pin::new(&mut tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut w2_context, Message(3))
+            Pin::new(&mut tx).poll_send(&mut w2_context.into(), Message(3))
         );
 
         assert_eq!(0, w2_count.get());
@@ -472,11 +473,11 @@ mod tests {
         let (mut tx, mut rx) = channel(100);
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context)
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
         );
 
         assert_eq!(0, w1_count.get());
@@ -564,7 +565,8 @@ mod tests {
         let (mut tx, rx) = channel(2);
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
+        let mut w1_context: crate::Context<'_> = w1_context.into();
 
         assert_eq!(
             PollSend::Ready,
@@ -593,11 +595,11 @@ mod tests {
         let (tx, mut rx) = channel::<()>(100);
 
         let (w1, w1_count) = new_count_waker();
-        let mut w1_context = Context::from_waker(&w1);
+        let w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context)
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
         );
 
         assert_eq!(0, w1_count.get());

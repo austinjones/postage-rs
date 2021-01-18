@@ -1,8 +1,9 @@
 use crate::{PollSend, Sink};
 use log::log_enabled;
 use pin_project::pin_project;
-use std::{fmt::Debug, pin::Pin, task::Context};
+use std::{fmt::Debug, pin::Pin};
 
+use crate::Context;
 #[pin_project]
 pub struct SinkLog<S> {
     #[pin]
