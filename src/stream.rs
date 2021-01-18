@@ -1,7 +1,9 @@
 use std::{future::Future, marker::PhantomPinned, ops::DerefMut, pin::Pin};
 
-use futures_task::{noop_waker, Context, Poll};
+use crate::Context;
+use futures_task::noop_waker;
 use pin_project::pin_project;
+use std::task::Poll;
 
 use self::{
     chain::ChainStream, filter::FilterStream, find::FindStream, map::MapStream, merge::MergeStream,
@@ -197,10 +199,11 @@ where
 {
     type Output = Option<S::Item>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        match Pin::new(this.recv).poll_recv(cx) {
+        let mut cx = cx.into();
+        match Pin::new(this.recv).poll_recv(&mut cx) {
             PollRecv::Ready(v) => Poll::Ready(Some(v)),
             PollRecv::Pending => Poll::Pending,
             PollRecv::Closed => Poll::Ready(None),

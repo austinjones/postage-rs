@@ -1,6 +1,7 @@
+use std::marker::PhantomPinned;
 use std::{future::Future, ops::DerefMut, pin::Pin, task::Poll};
-use std::{marker::PhantomPinned, task::Context};
 
+use crate::Context;
 use futures_task::noop_waker;
 use pin_project::pin_project;
 
@@ -162,14 +163,15 @@ where
 {
     type Output = Result<(), SendError<S::Item>>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         if let None = self.value {
             return Poll::Ready(Ok(()));
         }
 
         let this = self.project();
 
-        match this.send.poll_send(cx, this.value.take().unwrap()) {
+        let mut cx = cx.into();
+        match this.send.poll_send(&mut cx, this.value.take().unwrap()) {
             crate::PollSend::Ready => Poll::Ready(Ok(())),
             crate::PollSend::Pending(value) => {
                 *this.value = Some(value);

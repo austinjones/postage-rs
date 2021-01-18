@@ -42,7 +42,7 @@ impl Sink for Sender {
 
     fn poll_send(
         self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
+        _cx: &mut crate::Context<'_>,
         _value: (),
     ) -> crate::PollSend<Self::Item> {
         match self.shared.state.load(Ordering::Acquire) {
@@ -92,11 +92,11 @@ impl Stream for Receiver {
 
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut crate::Context<'_>,
     ) -> crate::PollRecv<Self::Item> {
         match self.shared.state.load(Ordering::Acquire) {
             State::Pending => {
-                self.shared.notify_rx.subscribe(cx.waker().clone());
+                self.shared.notify_rx.subscribe(cx);
                 PollRecv::Pending
             }
             State::Closed => PollRecv::Ready(()),

@@ -17,6 +17,7 @@
 mod channels;
 #[macro_use]
 mod logging;
+mod context;
 mod sink;
 mod stream;
 mod sync;
@@ -26,6 +27,8 @@ pub use channels::broadcast;
 pub use channels::mpsc;
 pub use channels::oneshot;
 pub use channels::watch;
+
+pub use context::Context;
 
 pub use sink::*;
 pub use stream::*;
