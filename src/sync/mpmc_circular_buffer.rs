@@ -202,7 +202,7 @@ impl BufferReader {
     }
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
-    pub fn clone<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
+    pub fn clone_with<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
         // let _head = buffer.head.write().unwrap();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
@@ -215,7 +215,7 @@ impl BufferReader {
         BufferReader { index }
     }
 
-    pub fn drop<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
+    pub fn drop_with<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
         // let _head = buffer.head.write().unwrap();
         buffer.readers.fetch_sub(1, Ordering::AcqRel);
 

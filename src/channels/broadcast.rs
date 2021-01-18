@@ -139,7 +139,7 @@ where
 impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
         let buffer = self.shared.extension();
-        let reader = self.reader.lock().unwrap().clone(buffer);
+        let reader = self.reader.lock().unwrap().clone_with(buffer);
 
         Self::new(self.shared.clone(), reader)
     }
@@ -148,8 +148,12 @@ impl<T> Clone for Receiver<T> {
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         let buffer = self.shared.extension();
-        let reader = &mut *self.reader.lock().unwrap();
-        reader.drop(buffer);
+        if let Ok(mut reader) = self.reader.lock() {
+            reader.drop_with(buffer);
+        } else {
+            #[cfg(feature = "debug")]
+            log::error!("Failed to drop reader - mutex is poisoned");
+        }
     }
 }
 
