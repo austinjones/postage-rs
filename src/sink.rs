@@ -184,7 +184,6 @@ pub trait Sink {
     ///
     /// Requires the `logging` feature
     #[cfg(feature = "logging")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "logging")))]
     fn log(self, level: log::Level) -> sink_log::SinkLog<Self>
     where
         Self: Sized,

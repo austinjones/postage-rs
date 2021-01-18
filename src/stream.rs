@@ -204,7 +204,6 @@ pub trait Stream {
     ///
     /// Requires the `logging` feature
     #[cfg(feature = "logging")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "logging")))]
     fn log(self, level: log::Level) -> stream_log::StreamLog<Self>
     where
         Self: Sized,
