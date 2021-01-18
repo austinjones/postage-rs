@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Constructs a pair of broadcast endpoints, with a fixed-size buffer of the given capacity
-pub fn channel<T: Clone + Send>(capacity: usize) -> (Sender<T>, Receiver<T>) {
+pub fn channel<T: Clone>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
     log::error!("Creating broadcast channel with capacity {}", capacity);
     // we add one spare capacity so that receivers have an empty slot to wait on
@@ -40,6 +40,9 @@ pub struct Sender<T> {
     pub(in crate::channels::broadcast) shared: SenderShared<MpmcCircularBuffer<T>>,
 }
 
+unsafe impl<T: Send> Send for Sender<T> {}
+unsafe impl<T: Send> Sync for Sender<T> {}
+
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
         Self {
@@ -48,7 +51,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-assert_impl_all!(Sender<String>: Send, Clone);
+assert_impl_all!(Sender<String>: Send, Sync, Clone);
 
 impl<T> Sink for Sender<T>
 where
@@ -104,7 +107,10 @@ pub struct Receiver<T> {
     reader: Mutex<BufferReader>,
 }
 
-assert_impl_all!(Receiver<String>: Send, Clone);
+unsafe impl<T: Send> Send for Receiver<T> {}
+unsafe impl<T: Send> Sync for Receiver<T> {}
+
+assert_impl_all!(Receiver<String>: Send, Sync, Clone);
 
 impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {
