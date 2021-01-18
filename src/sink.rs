@@ -101,7 +101,11 @@ pub use errors::*;
 ///
 ///     let mut combo = tx2
 ///         .after(tx)
-///         .filter(|i| *i >= 2)
+///         .filter(|i| *i >= 2);
+///     
+///     // The `logging` feature enables a combinator that logs values using the Debug trait.
+///     #[cfg(feature = "logging")]
+///     let combo = combo
 ///         .log(log::Level::Info);
 ///
 ///     combo.send(1usize).await.ok();
@@ -140,9 +144,10 @@ pub trait Sink {
 
     /// Attempts to send a message over the sink, without blocking.
     ///
-    /// Returns `Ok(())` if the value was accepted.
-    /// Returns `Err(TrySendError::Pending(value))` if the send would have blocked
-    /// Returns `Err(TrySendError::Rejected(value))` if the value was rejected
+    /// Returns:
+    /// - `Ok(())` if the value was accepted.
+    /// - `Err(TrySendError::Pending(value))` if the send would have blocked
+    /// - `Err(TrySendError::Rejected(value))` if the value was rejected
     fn try_send(&mut self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
     where
         Self: Unpin,
@@ -179,6 +184,7 @@ pub trait Sink {
     ///
     /// Requires the `logging` feature
     #[cfg(feature = "logging")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "logging")))]
     fn log(self, level: log::Level) -> sink_log::SinkLog<Self>
     where
         Self: Sized,

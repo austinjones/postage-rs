@@ -104,7 +104,11 @@ pub use errors::*;
 ///     let mut rx = rx
 ///         .map(|i| i * 2)
 ///         .filter(|i| *i >= 4)
-///         .find(|i| *i == 6)
+///         .find(|i| *i == 6);
+///
+///     // The `logging` feature enables a combinator that logs values using the Debug trait.
+///     #[cfg(feature = "logging")]
+///     let rx = rx
 ///         .log(log::Level::Info);
 ///
 ///     assert_eq!(Ok(6), rx.try_recv());
@@ -132,9 +136,11 @@ pub trait Stream {
     }
 
     /// Attempts to retrive a message from the stream, without blocking.
-    /// Returns `Ok(value)` if a message was ready.
-    /// Returns `TryRecvError::Pending` if the stream was open, but no messages were available.
-    /// Returns `TryRecvError::Rejected` if the stream has been closed.
+    ///
+    /// Returns:
+    /// - `Ok(value)` if a message is ready.
+    /// - `TryRecvError::Pending` if the stream is open, but no messages are available.
+    /// - `TryRecvError::Rejected` if the stream has been closed.
     fn try_recv(&mut self) -> Result<Self::Item, TryRecvError>
     where
         Self: Unpin,
@@ -157,7 +163,7 @@ pub trait Stream {
         MapStream::new(self, map)
     }
 
-    /// Filters messages returned by the stream, forwarding any to `.recv().await` where filter returns true.
+    /// Filters messages returned by the stream, ignoring messages where `filter` returns false.
     fn filter<Filter>(self, filter: Filter) -> FilterStream<Self, Filter>
     where
         Self: Sized + Unpin,
@@ -175,7 +181,7 @@ pub trait Stream {
         MergeStream::new(self, other)
     }
 
-    /// Chains two streams, returning values from this until it is closed, and then returning values from other.
+    /// Chains two streams, returning values from `self` until it is closed, and then returning values from `other`.
     fn chain<Other>(self, other: Other) -> ChainStream<Self, Other>
     where
         Other: Stream<Item = Self::Item>,
@@ -185,6 +191,7 @@ pub trait Stream {
     }
 
     /// Finds a message matching a condition.  When the condition is matched, a single value will be returned.
+    /// Then the stream will be closed.
     fn find<Condition>(self, condition: Condition) -> FindStream<Self, Condition>
     where
         Self: Sized + Unpin,
@@ -197,6 +204,7 @@ pub trait Stream {
     ///
     /// Requires the `logging` feature
     #[cfg(feature = "logging")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "logging")))]
     fn log(self, level: log::Level) -> stream_log::StreamLog<Self>
     where
         Self: Sized,

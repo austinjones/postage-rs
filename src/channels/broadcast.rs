@@ -61,13 +61,12 @@ where
         cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        // if all receivers have disconnected, we cannot return Rejected like other channels.
-        // this is because tx.subscribe() can be used to produce a new receiver.
-        // PollSend::Rejected can only be used if the sender will never accept the item.
+        // if all receivers have disconnected, we return Rejected like other channels.
+        // tx.subscribe() can be used to produce a new receiver.
+        // however, it would not receive this item, as it would need to be called
+        //   before the message is sent.
         if self.shared.is_closed() {
-            // the only place this is woken is in Sender::subscribe
-            self.shared.subscribe_recv(cx);
-            return PollSend::Pending(value);
+            return PollSend::Rejected(value);
         }
 
         // start at the head
@@ -429,7 +428,7 @@ mod tests {
         drop(rx);
         drop(rx2);
         assert_eq!(
-            PollSend::Pending(Message(2)),
+            PollSend::Rejected(Message(2)),
             Pin::new(&mut tx).poll_send(&mut cx, Message(2))
         );
     }
@@ -448,12 +447,12 @@ mod tests {
         let (w2, w2_count) = new_count_waker();
         let mut w2_context = Context::from_waker(&w2);
         assert_eq!(
-            PollSend::Pending(Message(2)),
+            PollSend::Rejected(Message(2)),
             Pin::new(&mut tx).poll_send(&mut w2_context, Message(2))
         );
 
         let _rx = tx.subscribe();
-        assert_eq!(1, w2_count.get());
+        assert_eq!(0, w2_count.get());
     }
 
     #[test]
