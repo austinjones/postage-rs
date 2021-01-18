@@ -18,6 +18,7 @@ mod channels;
 #[macro_use]
 mod logging;
 mod context;
+pub mod prelude;
 pub mod sink;
 pub mod stream;
 mod sync;

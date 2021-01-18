@@ -1,3 +1,39 @@
+//! A stream of values which are asynchronously produced, until the source is closed.
+//! Streams be constructed with a connected sender using postage channels:
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::Sink;
+//! use postage::stream::Stream;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (mut tx, mut rx) = channel(16);
+//!     tx.send(true).await;
+//!     drop(tx);
+//!     assert_eq!(Some(true), rx.recv().await);
+//!     assert_eq!(None, rx.recv().await);
+//! }
+//! ```
+//!
+//! Streams produce `Option<T>`.  When a None value is recieved, the stream is closed and
+//! will never produce another item.  Loops can be concicely written with `while let Some(v) = rx.recv().await {}`
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::Sink;
+//! use postage::stream::Stream;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (mut tx, mut rx) = channel(16);
+//!     tx.send(true).await;
+//!     tx.send(true).await;
+//!     drop(tx);
+//!
+//!     while let Some(_v) = rx.recv().await {
+//!         println!("Value received!")
+//!     }
+//! }
+//! ```
 use std::{future::Future, marker::PhantomPinned, ops::DerefMut, pin::Pin};
 
 use crate::Context;
@@ -24,6 +60,57 @@ mod stream_log;
 pub use errors::*;
 
 /// An asynchronous stream, which produces a series of messages until closed.
+///
+/// Streams implement `poll_recv`, a poll-based method very similar to `std::future::Future`.
+///
+/// Streams can be used in async code with `stream.recv().await`, or with `stream.try_recv()`.
+///
+/// ```rust
+/// use postage::mpsc::channel;
+/// use postage::sink::Sink;
+/// use postage::stream::Stream;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let (mut tx, mut rx) = channel(16);
+///     tx.send(true).await;
+///     tx.send(true).await;
+///     drop(tx);
+///
+///     while let Some(_v) = rx.recv().await {
+///         println!("Value received!");
+///         if let Ok(_v) = rx.try_recv() {
+///             println!("Extra value received!");
+///         }
+///     }
+/// }
+/// ```
+///
+/// Streams also support combinators, such as map, filter, find, and log.
+/// ```rust
+/// use postage::mpsc::channel;
+/// use postage::sink::Sink;
+/// use postage::stream::{Stream, TryRecvError};
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let (mut tx, rx) = channel(16);
+///
+///     tx.send(1usize).await;
+///     tx.send(2usize).await;
+///     tx.send(3usize).await;
+///     drop(tx);
+///
+///     let mut rx = rx
+///         .map(|i| i * 2)
+///         .filter(|i| *i >= 4)
+///         .find(|i| *i == 6)
+///         .log(log::Level::Info);
+///
+///     assert_eq!(Ok(6), rx.try_recv());
+///     assert_eq!(Err(TryRecvError::Closed), rx.try_recv());
+/// }
+/// ```
 #[must_use = "streams do nothing unless polled"]
 pub trait Stream {
     type Item;
@@ -57,7 +144,7 @@ pub trait Stream {
         match pin.poll_recv(&mut Context::empty()) {
             PollRecv::Ready(value) => Ok(value),
             PollRecv::Pending => Err(TryRecvError::Pending),
-            PollRecv::Closed => Err(TryRecvError::Rejected),
+            PollRecv::Closed => Err(TryRecvError::Closed),
         }
     }
 

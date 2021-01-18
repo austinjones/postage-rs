@@ -1,5 +1,5 @@
 /// An error type returned by `Sink::try_send`, when the sink is full, or is closed.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TrySendError<T> {
     /// The sink could accept the item at a later time
     Pending(T),

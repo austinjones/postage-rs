@@ -1,3 +1,55 @@
+//! A sink for values which are asynchronously accepted, until the target is closed.
+//!
+//! Sinks be constructed with a connected receiver using postage channels:
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::Sink;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (mut tx, rx) = channel(16);
+//!     assert_eq!(Ok(()), tx.send(true).await);
+//! }
+//! ```
+//!
+//! Sinks return an error if the channel is closed, and the message cannot be accepted by the receiver:
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::{SendError, Sink};
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (mut tx, rx) = channel(16);
+//!     drop(rx);
+//!     assert_eq!(Err(SendError(true)), tx.send(true).await);
+//! }
+//! ```
+//!
+//! Note that `Sink::send` returns an `Err` type, unlike `Stream::recv` which returns an option.
+//! This is because the failure to send a message sometimes needs to be interpreted as an application error:
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::{SendError, Sink};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), SendError<bool>> {
+//!     let (mut tx, rx) = channel(16);
+//!     tx.send(true).await?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! Tasks can ignore send errors by using `Result::ok`:
+//! ```rust
+//! use postage::mpsc::channel;
+//! use postage::sink::Sink;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let (mut tx, rx) = channel(16);
+//!     tx.send(true).await.ok();
+//! }
+//! ```
 use std::marker::PhantomPinned;
 use std::{future::Future, ops::DerefMut, pin::Pin, task::Poll};
 
@@ -14,6 +66,59 @@ mod sink_log;
 pub use errors::*;
 
 /// A sink which can asynchronously accept messages, and at some point may refuse to accept any further messages.
+///
+/// Sinks implement `poll_send`, a poll-based method very similar to `std::future::Future`.
+///
+/// Sinks can be used in async code with `stream.send(value).await`, or with `stream.try_send(value)`.  Note that
+/// `send` returns an error if the sink has been closed.  And `try_send` returns an error if the sink is full, or it is closed.
+///
+/// Send errors can be ignored using `Result::ok`.
+///
+/// ```rust
+/// use postage::mpsc::channel;
+/// use postage::sink::{Sink, TrySendError};
+///
+/// #[tokio::main]
+/// async fn main() -> Result<(), TrySendError<bool>> {
+///     let (mut tx, mut rx) = channel(16);
+///     tx.send(true).await.ok();
+///     tx.try_send(true)?;
+///     drop(tx);
+///     Ok(())
+/// }
+/// ```
+///
+/// Sinks also support combinators, such as map, filter, chain, and log.
+/// ```rust
+/// use postage::mpsc::channel;
+/// use postage::sink::{Sink, SendError, TrySendError};
+/// use postage::stream::Stream;
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let (mut tx, mut rx) = channel(16);
+///     let (tx2, mut rx2) = channel(16);
+///
+///     let mut combo = tx2
+///         .after(tx)
+///         .filter(|i| *i >= 2)
+///         .log(log::Level::Info);
+///
+///     combo.send(1usize).await.ok();
+///     combo.send(2usize).await.ok();
+
+///     assert_eq!(Some(2usize), rx.recv().await);
+///     drop(rx);
+///
+///     combo.send(3usize).await.ok();
+///     combo.send(4usize).await.ok();
+///     assert_eq!(Some(3usize), rx2.recv().await);
+///     assert_eq!(Some(4usize), rx2.recv().await);
+///
+///     drop(rx2);
+///     assert_eq!(Err(SendError(5usize)), combo.send(5usize).await);
+/// }
+/// ```
 pub trait Sink {
     type Item;
 

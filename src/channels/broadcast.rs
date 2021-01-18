@@ -949,7 +949,7 @@ mod tokio_tests {
                         continue;
                     }
 
-                    if let Err(TryRecvError::Rejected) = next {
+                    if let Err(TryRecvError::Closed) = next {
                         break;
                     }
 
@@ -1169,7 +1169,7 @@ mod async_std_tests {
                         continue;
                     }
 
-                    if let Err(TryRecvError::Rejected) = next {
+                    if let Err(TryRecvError::Closed) = next {
                         break;
                     }
 
