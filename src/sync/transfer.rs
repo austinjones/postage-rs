@@ -1,8 +1,6 @@
-use std::task::Waker;
-
 use atomic::{Atomic, Ordering};
 
-use crate::PollRecv;
+use crate::{Context, PollRecv};
 
 use super::{
     notifier::Notifier,
@@ -43,7 +41,7 @@ impl<T> Transfer<T> {
         Ok(())
     }
 
-    pub fn recv(&self, waker: &Waker) -> PollRecv<T> {
+    pub fn recv(&self, cx: &Context<'_>) -> PollRecv<T> {
         match self.value.try_recv() {
             Ok(value) => PollRecv::Ready(value),
             Err(TryRecvError::Pending) => {
@@ -55,7 +53,7 @@ impl<T> Transfer<T> {
                     };
                 }
 
-                self.notify_rx.subscribe(waker.clone());
+                self.notify_rx.subscribe(cx);
 
                 match self.value.try_recv() {
                     Ok(v) => PollRecv::Ready(v),

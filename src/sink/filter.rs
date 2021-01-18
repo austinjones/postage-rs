@@ -1,4 +1,6 @@
-use std::{pin::Pin, task::Context};
+use std::pin::Pin;
+
+use crate::Context;
 
 use crate::{PollSend, Sink};
 use pin_project::pin_project;

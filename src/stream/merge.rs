@@ -1,7 +1,8 @@
 use crate::{PollRecv, Stream};
 use pin_project::pin_project;
-use std::{pin::Pin, task::Context};
+use std::pin::Pin;
 
+use crate::Context;
 #[derive(Copy, Clone)]
 enum State {
     Left,

@@ -3,8 +3,8 @@ use std::{
     sync::{atomic::AtomicUsize, RwLock},
 };
 
+use crate::Context;
 use atomic::Ordering;
-use std::task::Context;
 
 use super::notifier::Notifier;
 use std::fmt::Debug;
@@ -292,7 +292,7 @@ impl<T> Slot<T> {
             return SlotTryWrite::Written(value);
         }
 
-        self.on_release.subscribe(cx.waker().clone());
+        self.on_release.subscribe(cx);
         SlotTryWrite::Pending(value)
     }
 
@@ -361,14 +361,14 @@ where
     pub fn try_read(&self, index: usize, readers: usize, cx: &Context<'_>) -> TryRead<T> {
         let data = self.data.read().unwrap();
         if data.is_none() {
-            self.on_write.subscribe(cx.waker().clone());
+            self.on_write.subscribe(cx);
             drop(data);
             return TryRead::Pending;
         }
 
         let slot_index = self.index.load(Ordering::Acquire);
         if slot_index < index {
-            self.on_write.subscribe(cx.waker().clone());
+            self.on_write.subscribe(cx);
             return TryRead::Pending;
         } else if slot_index > index {
             panic!(

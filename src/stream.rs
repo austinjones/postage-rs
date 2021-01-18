@@ -1,7 +1,8 @@
 use std::{future::Future, marker::PhantomPinned, ops::DerefMut, pin::Pin};
 
-use futures_task::{noop_waker, Context, Poll};
+use crate::Context;
 use pin_project::pin_project;
+use std::task::Poll;
 
 use self::{
     chain::ChainStream, filter::FilterStream, find::FindStream, map::MapStream, merge::MergeStream,
@@ -52,10 +53,8 @@ pub trait Stream {
         Self: Unpin,
     {
         let pin = Pin::new(self);
-        let waker = noop_waker();
-        let mut context = Context::from_waker(&waker);
 
-        match pin.poll_recv(&mut context) {
+        match pin.poll_recv(&mut Context::empty()) {
             PollRecv::Ready(value) => Ok(value),
             PollRecv::Pending => Err(TryRecvError::Pending),
             PollRecv::Closed => Err(TryRecvError::Rejected),
@@ -197,10 +196,11 @@ where
 {
     type Output = Option<S::Item>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        match Pin::new(this.recv).poll_recv(cx) {
+        let mut cx = cx.into();
+        match Pin::new(this.recv).poll_recv(&mut cx) {
             PollRecv::Ready(v) => Poll::Ready(Some(v)),
             PollRecv::Pending => Poll::Pending,
             PollRecv::Closed => Poll::Ready(None),

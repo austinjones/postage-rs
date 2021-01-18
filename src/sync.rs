@@ -1,8 +1,10 @@
-use std::{sync::Arc, task::Waker};
+use std::sync::Arc;
 
 use notifier::Notifier;
 use ref_count::RefCount;
 use std::fmt::Debug;
+
+use crate::Context;
 
 use self::ref_count::TryDecrement;
 
@@ -62,8 +64,8 @@ impl<E> SenderShared<E> {
         self.inner.receiver_notify.notify();
     }
 
-    pub fn subscribe_recv(&self, waker: Waker) {
-        self.inner.sender_notify.subscribe(waker);
+    pub fn subscribe_recv(&self, cx: &Context<'_>) {
+        self.inner.sender_notify.subscribe(cx);
     }
 
     pub fn is_alive(&self) -> bool {
@@ -125,8 +127,8 @@ impl<E> ReceiverShared<E> {
         self.inner.sender_notify.notify();
     }
 
-    pub fn subscribe_send(&self, waker: Waker) {
-        self.inner.receiver_notify.subscribe(waker);
+    pub fn subscribe_send(&self, cx: &Context<'_>) {
+        self.inner.receiver_notify.subscribe(cx);
     }
 
     pub fn is_alive(&self) -> bool {

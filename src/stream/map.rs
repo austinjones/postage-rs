@@ -1,5 +1,6 @@
-use std::{marker::PhantomData, pin::Pin, task::Context};
+use std::{marker::PhantomData, pin::Pin};
 
+use crate::Context;
 use crate::{PollRecv, Stream};
 use pin_project::pin_project;
 

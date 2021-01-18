@@ -1,7 +1,8 @@
+use crate::Context;
 use crate::{PollSend, Sink};
 use atomic::{Atomic, Ordering};
 use pin_project::pin_project;
-use std::{pin::Pin, task::Context};
+use std::pin::Pin;
 
 #[derive(Copy, Clone)]
 enum State {

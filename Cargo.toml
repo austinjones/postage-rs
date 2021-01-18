@@ -17,8 +17,6 @@ readme = "README.md"
 pin-project = "1"
 crossbeam-queue = "0.3"
 atomic = "0.5"
-# todo: remove this when complete: https://github.com/austinjones/postage-rs/issues/4
-futures-task = "0.3"
 static_assertions = "1.1.0"
 thiserror = "1.0"
 log = { version = "0.4", optional = true }
