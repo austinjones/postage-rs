@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
+use crate::stream::{PollRecv, Stream};
 use crate::Context;
-use crate::{PollRecv, Stream};
 
 pub struct RepeatStream<T> {
     data: T,
@@ -22,7 +22,29 @@ where
 {
     type Item = T;
 
-    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         return PollRecv::Ready(self.data.clone());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::{
+        stream::{PollRecv, Stream},
+        Context,
+    };
+
+    use super::RepeatStream;
+
+    #[test]
+    fn test() {
+        let mut repeat = RepeatStream::new(1usize);
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut repeat).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut repeat).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(1), Pin::new(&mut repeat).poll_recv(&mut cx));
     }
 }

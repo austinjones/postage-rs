@@ -3,7 +3,7 @@ use std::pin::Pin;
 use crate::Context;
 use atomic::{Atomic, Ordering};
 
-use crate::{PollRecv, Stream};
+use crate::stream::{PollRecv, Stream};
 
 #[derive(Copy, Clone)]
 enum State {
@@ -17,7 +17,11 @@ pub struct FindStream<From, Condition> {
     condition: Condition,
 }
 
-impl<From, Condition> FindStream<From, Condition> {
+impl<From, Condition> FindStream<From, Condition>
+where
+    From: Stream,
+    Condition: Fn(&From::Item) -> bool,
+{
     pub fn new(from: From, condition: Condition) -> Self {
         Self {
             state: Atomic::new(State::Reading),
@@ -34,7 +38,7 @@ where
 {
     type Item = From::Item;
 
-    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         let this = self.get_mut();
 
         if let State::Closed = this.state.load(Ordering::Acquire) {
@@ -45,7 +49,7 @@ where
             let from = Pin::new(&mut this.from);
             match from.poll_recv(cx) {
                 PollRecv::Ready(value) => {
-                    if !(this.condition)(&value) {
+                    if (this.condition)(&value) {
                         this.state.store(State::Closed, Ordering::Release);
 
                         return PollRecv::Ready(value);
@@ -55,5 +59,70 @@ where
                 PollRecv::Closed => return PollRecv::Closed,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::test::stream::*;
+    use crate::{
+        stream::{PollRecv, Stream},
+        Context,
+    };
+
+    use super::FindStream;
+
+    #[test]
+    fn find() {
+        let source = from_iter(vec![1, 2, 3]);
+        let mut find = FindStream::new(source, |i| *i == 2);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn find_none() {
+        let source = from_iter(vec![1, 3]);
+        let mut find = FindStream::new(source, |i| *i == 2);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn find_only_once() {
+        let source = from_iter(vec![1, 2, 2]);
+        let mut find = FindStream::new(source, |i| *i == 2);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(2), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn forward_pending() {
+        let source = pending::<usize>();
+        let mut find = FindStream::new(source, |i| *i == 2);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Pending, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn forward_closed() {
+        let source = closed::<usize>();
+        let mut find = FindStream::new(source, |i| *i == 2);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
     }
 }

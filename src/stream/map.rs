@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, pin::Pin};
 
+use crate::stream::{PollRecv, Stream};
 use crate::Context;
-use crate::{PollRecv, Stream};
 use pin_project::pin_project;
 
 #[pin_project]
@@ -34,7 +34,7 @@ where
 {
     type Item = Into;
 
-    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> crate::PollRecv<Self::Item> {
+    fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item> {
         let this = self.project();
 
         match this.from.poll_recv(cx) {
@@ -45,12 +45,49 @@ where
     }
 }
 
-// impl<From, Map, Sink> MapSink<From, Map, Sink> {
-//     pub fn new(map: Map, sink: Sink) {
-//         Self {
-//             from: PhandomData
-//             map,
-//             into: PhantomData,
-//         }
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use std::pin::Pin;
+
+    use crate::test::stream::*;
+    use crate::{
+        stream::{PollRecv, Stream},
+        Context,
+    };
+    use std::convert::identity;
+
+    use super::MapStream;
+
+    #[test]
+    fn map() {
+        let source = from_iter(vec![1, 2, 3]);
+        let mut find = MapStream::new(source, |i| i + 10);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Ready(11), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(12), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Ready(13), Pin::new(&mut find).poll_recv(&mut cx));
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn forward_pending() {
+        let source = pending::<usize>();
+        let mut find = MapStream::new(source, identity);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Pending, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+
+    #[test]
+    fn forward_closed() {
+        let source = closed::<usize>();
+        let mut find = MapStream::new(source, identity);
+
+        let mut cx = Context::empty();
+
+        assert_eq!(PollRecv::Closed, Pin::new(&mut find).poll_recv(&mut cx));
+    }
+}

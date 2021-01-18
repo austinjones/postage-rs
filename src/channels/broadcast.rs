@@ -10,11 +10,12 @@ use std::sync::Mutex;
 use static_assertions::assert_impl_all;
 
 use crate::{
+    sink::{PollSend, Sink},
+    stream::{PollRecv, Stream},
     sync::{
         mpmc_circular_buffer::{BufferReader, MpmcCircularBuffer, TryRead, TryWrite},
         shared, ReceiverShared, SenderShared,
     },
-    PollRecv, PollSend, Sink, Stream,
 };
 
 /// Constructs a pair of broadcast endpoints, with a fixed-size buffer of the given capacity
@@ -59,9 +60,14 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
         value: Self::Item,
-    ) -> crate::PollSend<Self::Item> {
+    ) -> PollSend<Self::Item> {
+        // if all receivers have disconnected, we cannot return Rejected like other channels.
+        // this is because tx.subscribe() can be used to produce a new receiver.
+        // PollSend::Rejected can only be used if the sender will never accept the item.
         if self.shared.is_closed() {
-            return PollSend::Rejected(value);
+            // the only place this is woken is in Sender::subscribe
+            self.shared.subscribe_recv(cx);
+            return PollSend::Pending(value);
         }
 
         // start at the head
@@ -85,6 +91,7 @@ impl<T> Sender<T> {
     pub fn subscribe(&self) -> Receiver<T> {
         let shared = self.shared.clone_receiver();
         let reader = shared.extension().new_reader();
+        self.shared.notify_self();
 
         Receiver::new(shared, reader)
     }
@@ -118,7 +125,7 @@ where
     fn poll_recv(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-    ) -> crate::PollRecv<Self::Item> {
+    ) -> PollRecv<Self::Item> {
         let buffer = self.shared.extension();
         let mut reader = self.reader.lock().unwrap();
 
@@ -159,10 +166,14 @@ impl<T> Drop for Receiver<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{pin::Pin, task::Context};
+    use std::pin::Pin;
 
-    use crate::test::{noop_context, panic_context};
-    use crate::{PollRecv, PollSend, Sink, Stream};
+    use crate::{
+        sink::{PollSend, Sink},
+        stream::{PollRecv, Stream},
+        test::{noop_context, panic_context},
+        Context,
+    };
     use futures_test::task::new_count_waker;
 
     use super::{channel, Receiver, Sender};
@@ -418,9 +429,31 @@ mod tests {
         drop(rx);
         drop(rx2);
         assert_eq!(
-            PollSend::Rejected(Message(2)),
+            PollSend::Pending(Message(2)),
             Pin::new(&mut tx).poll_send(&mut cx, Message(2))
         );
+    }
+
+    #[test]
+    fn receiver_reconnect() {
+        let mut cx = panic_context();
+        let (mut tx, rx) = channel(100);
+
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+        );
+        drop(rx);
+
+        let (w2, w2_count) = new_count_waker();
+        let mut w2_context = Context::from_waker(&w2);
+        assert_eq!(
+            PollSend::Pending(Message(2)),
+            Pin::new(&mut tx).poll_send(&mut w2_context, Message(2))
+        );
+
+        let _rx = tx.subscribe();
+        assert_eq!(1, w2_count.get());
     }
 
     #[test]
@@ -739,12 +772,13 @@ mod tokio_tests {
         time::{self, timeout},
     };
 
+    use crate::sink::Sink;
     use crate::{
+        stream::{Stream, TryRecvError},
         test::{
             capacity_iter, Channel, Channels, Message, CHANNEL_TEST_RECEIVERS,
             CHANNEL_TEST_SENDERS, TEST_TIMEOUT,
         },
-        Sink, Stream, TryRecvError,
     };
 
     #[tokio::test(flavor = "multi_thread")]
@@ -961,11 +995,12 @@ mod async_std_tests {
     };
 
     use crate::{
+        sink::Sink,
+        stream::{Stream, TryRecvError},
         test::{
             capacity_iter, Channel, Channels, Message, CHANNEL_TEST_RECEIVERS,
             CHANNEL_TEST_SENDERS, TEST_TIMEOUT,
         },
-        Sink, Stream, TryRecvError,
     };
 
     #[async_std::test]

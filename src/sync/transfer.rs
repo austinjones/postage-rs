@@ -1,6 +1,6 @@
 use atomic::{Atomic, Ordering};
 
-use crate::{Context, PollRecv};
+use crate::{stream::PollRecv, Context};
 
 use super::{
     notifier::Notifier,
