@@ -27,6 +27,10 @@ impl<'a> Context<'a> {
         Context { waker: Some(waker) }
     }
 
+    pub fn empty() -> Self {
+        Self { waker: None }
+    }
+
     /// Returns an optional reference to the `Waker` for the current task.
     pub fn waker(&self) -> Option<&'a Waker> {
         self.waker.clone()
