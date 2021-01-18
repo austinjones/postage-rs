@@ -1,23 +1,23 @@
-use std::{collections::LinkedList, sync::Mutex, task::Waker};
+use crossbeam_queue::SegQueue;
+use std::task::Waker;
 
 #[derive(Debug)]
 pub struct Notifier {
-    wakers: Mutex<LinkedList<Waker>>,
+    wakers: SegQueue<Waker>,
 }
 
 impl Notifier {
     pub fn new() -> Self {
         Self {
-            wakers: Mutex::new(LinkedList::new()),
+            wakers: SegQueue::new(),
         }
     }
 
     pub fn notify(&self) {
-        let mut wakers = self.wakers.lock().unwrap();
         #[cfg(feature = "debug")]
         let mut woken = 0usize;
 
-        while let Some(waker) = wakers.pop_back() {
+        while let Some(waker) = self.wakers.pop() {
             #[cfg(feature = "debug")]
             {
                 woken += 1;
@@ -33,7 +33,6 @@ impl Notifier {
     }
 
     pub fn subscribe(&self, waker: Waker) {
-        let mut wakers = self.wakers.lock().unwrap();
-        wakers.push_front(waker);
+        self.wakers.push(waker);
     }
 }
