@@ -9,12 +9,21 @@ use super::{PollRecv, Stream};
 pub struct StreamLog<S> {
     #[pin]
     stream: S,
+    type_name: &'static str,
     level: log::Level,
 }
 
-impl<S> StreamLog<S> {
+impl<S> StreamLog<S>
+where
+    S: Stream,
+{
     pub fn new(stream: S, level: log::Level) -> Self {
-        StreamLog { stream, level }
+        let type_name = std::any::type_name::<S::Item>();
+        StreamLog {
+            stream,
+            type_name,
+            level,
+        }
     }
 }
 
@@ -29,7 +38,7 @@ where
         let this = self.project();
         match this.stream.poll_recv(cx) {
             PollRecv::Ready(value) => {
-                log!(*this.level, "{:?}", &value);
+                log!(*this.level, "<{}> {:?}", this.type_name, &value);
                 PollRecv::Ready(value)
             }
             PollRecv::Pending => PollRecv::Pending,
@@ -52,16 +61,41 @@ mod tests {
 
     use super::StreamLog;
 
+    #[derive(Debug, Clone, PartialEq)]
+    struct Message(usize);
+
+    #[derive(Debug, Clone, PartialEq)]
+    enum MessageEnum {
+        Variant(usize),
+    }
+
     #[test]
     fn ready_forwarded() {
-        let mut repeat = StreamLog::new(ready(1usize), Level::Info);
+        crate::logging::enable_log();
+        let mut repeat = StreamLog::new(ready(Message(1usize)), Level::Info);
         let mut cx = Context::empty();
 
-        assert_eq!(PollRecv::Ready(1), Pin::new(&mut repeat).poll_recv(&mut cx));
+        assert_eq!(
+            PollRecv::Ready(Message(1usize)),
+            Pin::new(&mut repeat).poll_recv(&mut cx)
+        );
+    }
+
+    #[test]
+    fn ready_enum() {
+        crate::logging::enable_log();
+        let mut repeat = StreamLog::new(ready(MessageEnum::Variant(1usize)), Level::Info);
+        let mut cx = Context::empty();
+
+        assert_eq!(
+            PollRecv::Ready(MessageEnum::Variant(1usize)),
+            Pin::new(&mut repeat).poll_recv(&mut cx)
+        );
     }
 
     #[test]
     fn pending_forwarded() {
+        crate::logging::enable_log();
         let mut repeat = StreamLog::new(pending::<usize>(), Level::Info);
         let mut cx = Context::empty();
 
@@ -70,6 +104,7 @@ mod tests {
 
     #[test]
     fn closed_forwarded() {
+        crate::logging::enable_log();
         let mut repeat = StreamLog::new(closed::<usize>(), Level::Info);
         let mut cx = Context::empty();
 
