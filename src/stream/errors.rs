@@ -7,6 +7,6 @@ pub enum TryRecvError {
     #[error("TryRecvError::Pending")]
     Pending,
     /// The stream is closed, and will never produce an item
-    #[error("TryRecvError::Rejected")]
+    #[error("TryRecvError::Closed")]
     Closed,
 }
