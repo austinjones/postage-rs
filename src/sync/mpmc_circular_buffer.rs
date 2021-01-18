@@ -130,9 +130,9 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        // let head = self.head.write().unwrap();
+        let head = self.head.read().unwrap();
         self.readers.fetch_add(1, Ordering::AcqRel);
-        let index = *self.head.read().unwrap();
+        let index = *head;
 
         self.mark_read_in_range(0, index);
 
@@ -203,7 +203,7 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone_with<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
-        // let _head = buffer.head.write().unwrap();
+        let _head = buffer.head.read().unwrap();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
         let index = self.index;
@@ -216,7 +216,7 @@ impl BufferReader {
     }
 
     pub fn drop_with<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
-        // let _head = buffer.head.write().unwrap();
+        let _head = buffer.head.read().unwrap();
         buffer.readers.fetch_sub(1, Ordering::AcqRel);
 
         for (_id, slot) in buffer.buffer.iter().enumerate() {
