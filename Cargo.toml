@@ -1,6 +1,6 @@
 [package]
 name = "postage"
-version = "0.3.0"
+version = "0.3.1"
 description = "An async channel library"
 keywords = ["async", "channels"]
 categories = ["asynchronous"]
