@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use pin_project::pin_project;
 use std::marker::PhantomData;
 
