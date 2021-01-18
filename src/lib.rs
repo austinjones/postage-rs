@@ -14,8 +14,6 @@
 //!
 //! Postage is in *beta* quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
 
-#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
-
 mod channels;
 mod context;
 mod logging;

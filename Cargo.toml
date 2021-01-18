@@ -33,14 +33,9 @@ default = ["logging"]
 logging = ["log"]
 # enables debug log statements.  disabled by default in production builds as they are *very verbose*
 debug = ["log", "simple_logger"]
-docsrs = []
 
 # [[example]]
 # name = "tokio"
 
 # [[example]]
 # name = "async-std"
-
-[package.metadata.docs.rs]
-all-features = true
-rustdoc-args = ["--cfg", "docsrs"]
