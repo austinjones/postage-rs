@@ -105,7 +105,7 @@ pub use errors::*;
 ///     
 ///     // The `logging` feature enables a combinator that logs values using the Debug trait.
 ///     #[cfg(feature = "logging")]
-///     let combo = combo
+///     let mut combo = combo
 ///         .log(log::Level::Info);
 ///
 ///     combo.send(1usize).await.ok();

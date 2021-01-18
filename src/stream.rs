@@ -108,7 +108,7 @@ pub use errors::*;
 ///
 ///     // The `logging` feature enables a combinator that logs values using the Debug trait.
 ///     #[cfg(feature = "logging")]
-///     let rx = rx
+///     let mut rx = rx
 ///         .log(log::Level::Info);
 ///
 ///     assert_eq!(Ok(6), rx.try_recv());
