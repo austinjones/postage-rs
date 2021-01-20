@@ -13,7 +13,7 @@ mod debug_impl {
     pub fn enable_log() {
         LOG.call_once(|| {
             simple_logger::SimpleLogger::new()
-                .with_level(LevelFilter::Debug)
+                .with_level(LevelFilter::Info)
                 .init()
                 .unwrap();
         });
