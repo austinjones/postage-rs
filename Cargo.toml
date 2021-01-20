@@ -25,7 +25,20 @@ simple_logger = { version = "1.11.0", optional = true }
 [dev-dependencies]
 futures-test = "0.3"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
-async-std = { version = "1.8", features = ["attributes"] }
+async-std = { version = "1.9", features = ["attributes"] }
+criterion = "0.3"
+
+[[bench]]
+name = "broadcast"
+harness = false
+
+[[bench]]
+name = "mpsc"
+harness = false
+
+[[bench]]
+name = "watch"
+harness = false
 
 [features]
 default = ["logging"]
