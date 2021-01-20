@@ -405,44 +405,50 @@ where
     T: Clone,
 {
     pub fn try_read(&self, index: usize, readers: &AtomicUsize, cx: &Context<'_>) -> TryRead<T> {
-        let data = self.data.read().unwrap();
-        if data.is_none() {
-            self.on_write.subscribe(cx);
-            drop(data);
-            return TryRead::Pending;
-        }
+        loop {
+            let slot_index = self.index.load(Ordering::Acquire);
+            if slot_index < index {
+                self.on_write.subscribe(cx);
 
-        let slot_index = self.index.load(Ordering::Acquire);
-        if slot_index < index {
-            self.on_write.subscribe(cx);
-            return TryRead::Pending;
-        } else if slot_index > index {
+                // if the index has advanced, continue and attempt to read again
+                if self.index.load(Ordering::Acquire) >= index {
+                    continue;
+                }
+
+                return TryRead::Pending;
+            } else if slot_index > index {
+                #[cfg(feature = "debug")]
+                log::error!(
+                    "Slot index {} has advanced past reader position {}",
+                    slot_index,
+                    index
+                );
+                return TryRead::Pending;
+            }
+
+            let data_lock = self.data.read().unwrap();
+            // the only way the slot could be uninitialized is if `index` is 0,
+            // but readers are initialized with index: 1
+            // if the slot index was 0, then the above code would have returned TryRead::Pending
+            let data_ref = data_lock.as_ref().unwrap();
+
+            let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
             #[cfg(feature = "debug")]
-            log::error!(
-                "Slot index {} has advanced past reader position {}",
-                slot_index,
-                index
+            log::debug!(
+                "[{}] Read action occurred.  Increased reads to {}",
+                index,
+                reads
             );
-            return TryRead::Pending;
+
+            let data_cloned = data_ref.clone();
+            // release the read lock
+
+            if reads >= readers.load(Ordering::Acquire) {
+                self.on_release.notify();
+            }
+
+            break TryRead::Ready(data_cloned);
         }
-
-        let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
-        #[cfg(feature = "debug")]
-        log::debug!(
-            "[{}] Read action occurred.  Increased reads to {}",
-            index,
-            reads
-        );
-
-        let data_ref = data.as_ref().unwrap();
-        let data_cloned = data_ref.clone();
-        // release the read lock
-
-        if reads >= readers.load(Ordering::Acquire) {
-            self.on_release.notify();
-        }
-
-        TryRead::Ready(data_cloned)
     }
 }
 
