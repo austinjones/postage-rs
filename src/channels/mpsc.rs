@@ -60,6 +60,10 @@ impl<T> Sink for Sender<T> {
             Err(v) => {
                 self.shared.subscribe_recv(cx);
 
+                if self.shared.is_closed() {
+                    return PollSend::Rejected(v);
+                }
+
                 match queue.push(v) {
                     Ok(_) => {
                         self.shared.notify_receivers();

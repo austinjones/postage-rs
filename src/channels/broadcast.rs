@@ -5,8 +5,6 @@
 //!
 //! Senders also provide a subscribe() method which adds a receiver on the oldest value.
 
-use std::sync::Mutex;
-
 use static_assertions::assert_impl_all;
 
 use crate::{
@@ -104,7 +102,7 @@ impl<T> Sender<T> {
 /// When cloned, the new receiver will begin processing messages at the same location as the original.
 pub struct Receiver<T> {
     shared: ReceiverShared<MpmcCircularBuffer<T>>,
-    reader: Mutex<BufferReader>,
+    reader: BufferReader,
 }
 
 unsafe impl<T: Send> Send for Receiver<T> {}
@@ -114,10 +112,7 @@ assert_impl_all!(Receiver<String>: Send, Sync, Clone);
 
 impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {
-        Self {
-            shared,
-            reader: Mutex::new(reader),
-        }
+        Self { shared, reader }
     }
 }
 
@@ -131,16 +126,19 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
     ) -> PollRecv<Self::Item> {
-        let buffer = self.shared.extension();
-        let mut reader = self.reader.lock().unwrap();
+        // unpin self, so Rust can infer that the borrows of reader and buffer are disjoint
+        let this = self.get_mut();
+        let reader = &mut this.reader;
+        let buffer = this.shared.extension();
 
         match reader.try_read(buffer, cx) {
             TryRead::Pending => {
-                if self.shared.is_closed() {
+                this.shared.subscribe_send(cx);
+
+                if this.shared.is_closed() {
                     return PollRecv::Closed;
                 }
 
-                self.shared.subscribe_send(cx);
                 PollRecv::Pending
             }
             TryRead::Ready(value) => PollRecv::Ready(value),
@@ -151,7 +149,7 @@ where
 impl<T> Clone for Receiver<T> {
     fn clone(&self) -> Self {
         let buffer = self.shared.extension();
-        let reader = self.reader.lock().unwrap().clone_with(buffer);
+        let reader = self.reader.clone_with(buffer);
 
         Self::new(self.shared.clone(), reader)
     }
@@ -160,12 +158,7 @@ impl<T> Clone for Receiver<T> {
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         let buffer = self.shared.extension();
-        if let Ok(mut reader) = self.reader.lock() {
-            reader.drop_with(buffer);
-        } else {
-            #[cfg(feature = "debug")]
-            log::error!("Failed to drop reader - mutex is poisoned");
-        }
+        self.reader.drop_with(buffer);
     }
 }
 
@@ -1010,7 +1003,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn simple() {
-        // crate::logging::enable_log();
+        crate::logging::enable_log();
         for cap in capacity_iter() {
             let (mut tx, mut rx) = super::channel(cap);
 
