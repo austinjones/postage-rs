@@ -1,6 +1,6 @@
 use std::{
     cmp::max,
-    sync::{atomic::AtomicUsize, RwLock},
+    sync::{atomic::AtomicUsize, Mutex, RwLock},
 };
 
 use crate::Context;
@@ -16,7 +16,7 @@ use std::fmt::Debug;
 pub struct MpmcCircularBuffer<T> {
     buffer: Box<[Slot<T>]>,
     head: AtomicUsize,
-    maintenance: RwLock<()>,
+    maintenance: Mutex<()>,
     readers: AtomicUsize,
 }
 
@@ -47,7 +47,7 @@ where
             buffer: vec.into_boxed_slice(),
             head: AtomicUsize::new(1),
             readers: AtomicUsize::new(1),
-            maintenance: RwLock::new(()),
+            maintenance: Mutex::new(()),
         };
 
         let reader = BufferReader { index: 1 };
@@ -74,26 +74,23 @@ impl<T> MpmcCircularBuffer<T> {
 
     pub fn try_write(&self, mut value: T, cx: &Context<'_>) -> TryWrite<T> {
         loop {
-            let _maint = self.maintenance.read().unwrap();
             let head_id = self.head.load(Ordering::Acquire);
             let head_slot = self.get_slot(head_id);
 
-            let readers = self.readers.load(Ordering::Acquire);
-
             #[cfg(feature = "debug")]
             log::debug!(
-                "[{}] Attempting write with required readers {}, slot index {:?} with {:?} readers of {} required",
+                "[{}] Attempting write with required readers {:?}, slot index {:?} with {:?} readers of {:?} required",
                 head_id,
-                readers,
+                &self.readers,
                 head_slot.index,
                 head_slot.reads,
-                readers
+                &self.readers
             );
 
             // try to write a value
             // if the write is accepted, release the head lock in the closure
             // this minimizes the time head is locked, and allows the move of value to occur after the lock is released
-            let try_write = head_slot.try_write(head_id, value, readers, cx, || {
+            let try_write = head_slot.try_write(head_id, value, &self.readers, cx, || {
                 if let Err(_e) = self.head.compare_exchange(
                     head_id,
                     head_id + 1,
@@ -119,7 +116,7 @@ impl<T> MpmcCircularBuffer<T> {
                     let slot_index = head_id % self.len();
 
                     #[cfg(feature = "debug")]
-                    log::warn!(
+                    log::info!(
                         "[{}] Write complete in slot {}, head incremented from {} to {}",
                         head_id,
                         slot_index,
@@ -138,7 +135,7 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        let _maint = self.maintenance.write().unwrap();
+        let _maint = self.maintenance.lock().unwrap();
         let index = self.head.load(Ordering::Acquire);
         self.readers.fetch_add(1, Ordering::AcqRel);
 
@@ -183,9 +180,7 @@ impl BufferReader {
         let index = self.index;
         let slot = buffer.get_slot(index);
 
-        let readers = buffer.readers.load(Ordering::Acquire);
-
-        let try_read = slot.try_read(index, readers, cx);
+        let try_read = slot.try_read(index, &buffer.readers, cx);
 
         match &try_read {
             TryRead::Ready(_) => {
@@ -193,11 +188,11 @@ impl BufferReader {
 
                 #[cfg(feature = "debug")]
                 log::debug!(
-                    "[{}] Read complete in slot {} with {:?} reads of {} required",
+                    "[{}] Read complete in slot {} with {:?} reads of {:?} required",
                     index,
                     index % buffer.len(),
                     slot.reads,
-                    readers,
+                    &buffer.readers,
                 );
             }
             TryRead::Pending => {
@@ -211,8 +206,7 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone_with<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
-        // let _head = buffer.head.read().unwrap();
-        let _maint = buffer.maintenance.write().unwrap();
+        let _maint = buffer.maintenance.lock().unwrap();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
         let index = self.index;
@@ -225,26 +219,29 @@ impl BufferReader {
     }
 
     pub fn drop_with<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
-        // let _head = buffer.head.read().unwrap();
-        let _maint = buffer.maintenance.write().unwrap();
+        let _maint = buffer.maintenance.lock().unwrap();
+
+        // first, cancel all reads that this reader has committed
+        buffer
+            .buffer
+            .iter()
+            .for_each(|slot| slot.decrement_read_in_range(0, self.index));
+
+        // then decrement the reader count
         buffer.readers.fetch_sub(1, Ordering::AcqRel);
 
+        // then go through the buffer, and release any slots that should be released
         for (_id, slot) in buffer.buffer.iter().enumerate() {
-            let readers = buffer.readers.load(Ordering::Acquire);
-
             #[cfg(feature = "debug")]
             log::debug!(
-                "[{}] Dropping reader, notifying slot {} with reads {:?} of new reader count [{}/{:?}]",
+                "[{}] Dropping reader, notifying slot {} with reads {:?} of new reader count {:?}",
                 self.index,
                 _id,
                 slot.reads,
-                readers,
                 buffer.readers,
             );
 
-            slot.decrement_read_in_range(0, self.index);
-
-            slot.notify_readers_decreased(readers);
+            slot.notify_readers_decreased(&buffer.readers);
         }
 
         #[cfg(feature = "debug")]
@@ -279,7 +276,7 @@ impl<T> Slot<T> {
         &self,
         index: usize,
         value: T,
-        readers: usize,
+        readers: &AtomicUsize,
         cx: &Context<'_>,
         on_write: OnWrite,
     ) -> SlotTryWrite<T>
@@ -291,12 +288,23 @@ impl<T> Slot<T> {
 
             if prev_index >= index {
                 return SlotTryWrite::Written(value);
-            } else if prev_index != 0 && self.reads.load(Ordering::Acquire) < readers {
+            } else if prev_index != 0
+                && self.reads.load(Ordering::Acquire) < readers.load(Ordering::Acquire)
+            {
                 self.on_release.subscribe(cx);
 
-                if self.reads.load(Ordering::Acquire) >= readers {
+                if prev_index < self.index.load(Ordering::Acquire) {
                     #[cfg(feature = "debug")]
-                    log::info!(
+                    log::warn!(
+                        "[{}] Slot index advanced during write, invalidating subscription",
+                        index
+                    );
+                    continue;
+                }
+
+                if self.reads.load(Ordering::Acquire) >= readers.load(Ordering::Acquire) {
+                    #[cfg(feature = "debug")]
+                    log::warn!(
                         "[{}] Reads incremented during write, invalidating subscription",
                         index
                     );
@@ -308,6 +316,17 @@ impl<T> Slot<T> {
 
             // lock the data, then update the index
             let mut data = self.data.write().unwrap();
+            if prev_index != 0
+                && self.reads.load(Ordering::Acquire) < readers.load(Ordering::Acquire)
+            {
+                #[cfg(feature = "debug")]
+                log::warn!(
+                    "[{}] Reads decreased during write (upgrading index {})",
+                    index,
+                    prev_index
+                );
+                continue;
+            }
             if let Err(_) =
                 self.index
                     .compare_exchange(prev_index, index, Ordering::AcqRel, Ordering::Relaxed)
@@ -374,8 +393,8 @@ impl<T> Slot<T> {
         }
     }
 
-    fn notify_readers_decreased(&self, readers: usize) {
-        if self.reads.load(Ordering::Acquire) >= readers {
+    fn notify_readers_decreased(&self, readers: &AtomicUsize) {
+        if self.reads.load(Ordering::Acquire) >= readers.load(Ordering::Acquire) {
             self.on_release.notify();
         }
     }
@@ -385,7 +404,7 @@ impl<T> Slot<T>
 where
     T: Clone,
 {
-    pub fn try_read(&self, index: usize, readers: usize, cx: &Context<'_>) -> TryRead<T> {
+    pub fn try_read(&self, index: usize, readers: &AtomicUsize, cx: &Context<'_>) -> TryRead<T> {
         let data = self.data.read().unwrap();
         if data.is_none() {
             self.on_write.subscribe(cx);
@@ -398,10 +417,13 @@ where
             self.on_write.subscribe(cx);
             return TryRead::Pending;
         } else if slot_index > index {
-            panic!(
+            #[cfg(feature = "debug")]
+            log::error!(
                 "Slot index {} has advanced past reader position {}",
-                slot_index, index
+                slot_index,
+                index
             );
+            return TryRead::Pending;
         }
 
         let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
@@ -416,7 +438,7 @@ where
         let data_cloned = data_ref.clone();
         // release the read lock
 
-        if reads >= readers {
+        if reads >= readers.load(Ordering::Acquire) {
             self.on_release.notify();
         }
 
