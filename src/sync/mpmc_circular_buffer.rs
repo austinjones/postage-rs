@@ -427,10 +427,6 @@ where
             }
 
             let data_lock = self.data.read().unwrap();
-            // the only way the slot could be uninitialized is if `index` is 0,
-            // but readers are initialized with index: 1
-            // if the slot index was 0, then the above code would have returned TryRead::Pending
-            let data_ref = data_lock.as_ref().unwrap();
 
             let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
             #[cfg(feature = "debug")]
@@ -440,8 +436,11 @@ where
                 reads
             );
 
+            // the only way the slot could be uninitialized is if `index` is 0,
+            // but readers are initialized with index: 1
+            // if the slot index was 0, then the above code would have returned TryRead::Pending
+            let data_ref = data_lock.as_ref().unwrap();
             let data_cloned = data_ref.clone();
-            // release the read lock
 
             if reads >= readers.load(Ordering::Acquire) {
                 self.on_release.notify();
