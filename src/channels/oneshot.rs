@@ -2,13 +2,13 @@
 //! Neither can be cloned.  If the sender drops, the receiver recieves a `None` value.
 use std::sync::Arc;
 
-use static_assertions::{assert_impl_all, assert_not_impl_all};
-
+use super::SendMessage;
 use crate::{
     sink::{PollSend, Sink},
     stream::{PollRecv, Stream},
     sync::transfer::Transfer,
 };
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
@@ -29,8 +29,8 @@ pub struct Sender<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
 
-assert_impl_all!(Sender<String>: Send);
-assert_not_impl_all!(Sender<String>: Clone);
+assert_impl_all!(Sender<SendMessage>: Send, Sync);
+assert_not_impl_all!(Sender<SendMessage>: Clone);
 
 impl<T> Sink for Sender<T> {
     type Item = T;
@@ -58,8 +58,8 @@ pub struct Receiver<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
 
-assert_impl_all!(Sender<String>: Send);
-assert_not_impl_all!(Sender<String>: Clone);
+assert_impl_all!(Sender<SendMessage>: Send, Sync);
+assert_not_impl_all!(Sender<SendMessage>: Clone);
 
 impl<T> Stream for Receiver<T> {
     type Item = T;

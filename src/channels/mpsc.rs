@@ -1,14 +1,14 @@
 //! A fixed-capacity multi-producer, single-consumer channel.  
 //! The producer can be cloned, and the sender task is suspended if the channel becomes full.
 
-use crossbeam_queue::ArrayQueue;
-use static_assertions::{assert_impl_all, assert_not_impl_all};
-
+use super::SendMessage;
 use crate::{
     sink::{PollSend, Sink},
     stream::{PollRecv, Stream},
     sync::{shared, ReceiverShared, SenderShared},
 };
+use crossbeam_queue::ArrayQueue;
+use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
@@ -28,7 +28,7 @@ pub struct Sender<T> {
     pub(in crate::channels::mpsc) shared: SenderShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Sender<String>: Clone, Send);
+assert_impl_all!(Sender<String>: Clone, Send, Sync);
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
@@ -83,8 +83,8 @@ pub struct Receiver<T> {
     pub(in crate::channels::mpsc) shared: ReceiverShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Receiver<String>: Send);
-assert_not_impl_all!(Receiver<String>: Clone);
+assert_impl_all!(Receiver<SendMessage>: Send, Sync);
+assert_not_impl_all!(Receiver<SendMessage>: Clone);
 
 impl<T> Stream for Receiver<T> {
     type Item = T;
