@@ -5,6 +5,7 @@
 //!
 //! Senders also provide a subscribe() method which adds a receiver on the oldest value.
 
+use super::SendMessage;
 use static_assertions::assert_impl_all;
 
 use crate::{
@@ -49,7 +50,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-assert_impl_all!(Sender<String>: Send, Sync, Clone);
+assert_impl_all!(Sender<SendMessage>: Send, Sync, Clone);
 
 impl<T> Sink for Sender<T>
 where
@@ -108,7 +109,7 @@ pub struct Receiver<T> {
 unsafe impl<T: Send> Send for Receiver<T> {}
 unsafe impl<T: Send> Sync for Receiver<T> {}
 
-assert_impl_all!(Receiver<String>: Send, Sync, Clone);
+assert_impl_all!(Receiver<SendMessage>: Send, Sync, Clone);
 
 impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {

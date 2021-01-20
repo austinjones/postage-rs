@@ -38,7 +38,7 @@ pub struct Sender {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
 
-assert_impl_all!(Sender: Send);
+assert_impl_all!(Sender: Send, Sync);
 assert_not_impl_all!(Sender: Clone);
 
 impl Sink for Sender {
@@ -71,7 +71,7 @@ pub struct Receiver {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
 
-assert_impl_all!(Receiver: Send, Clone);
+assert_impl_all!(Receiver: Clone, Send, Sync);
 
 #[derive(Copy, Clone)]
 enum State {

@@ -6,6 +6,7 @@
 //!
 //! Values transmitted over watch channels must implement Default.  A simple way to achieve this is to transmit `Option<T>`.
 
+use super::SendSyncMessage;
 use std::{
     ops::Deref,
     sync::{
@@ -43,8 +44,8 @@ pub struct Sender<T> {
     pub(in crate::channels::watch) shared: SenderShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Sender<String>: Send);
-assert_not_impl_all!(Sender<String>: Clone);
+assert_impl_all!(Sender<SendSyncMessage>: Send, Sync);
+assert_not_impl_all!(Sender<SendSyncMessage>: Clone);
 
 impl<T> Sink for Sender<T> {
     type Item = T;
@@ -73,7 +74,7 @@ pub struct Receiver<T> {
     pub(in crate::channels::watch) generation: AtomicUsize,
 }
 
-assert_impl_all!(Receiver<String>: Clone, Send);
+assert_impl_all!(Receiver<SendSyncMessage>: Clone, Send, Sync);
 
 impl<T> Stream for Receiver<T>
 where
