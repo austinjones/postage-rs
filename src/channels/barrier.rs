@@ -54,7 +54,7 @@ impl Sink for Sender {
                 self.shared.close();
                 PollSend::Ready
             }
-            State::Closed => PollSend::Rejected(()),
+            State::Sent => PollSend::Rejected(()),
         }
     }
 }
@@ -76,7 +76,7 @@ assert_impl_all!(Receiver: Send, Clone);
 #[derive(Copy, Clone)]
 enum State {
     Pending,
-    Closed,
+    Sent,
 }
 
 struct Shared {
@@ -86,7 +86,7 @@ struct Shared {
 
 impl Shared {
     pub fn close(&self) {
-        self.state.store(State::Closed, Ordering::Release);
+        self.state.store(State::Sent, Ordering::Release);
         self.notify_rx.notify();
     }
 }
@@ -101,9 +101,14 @@ impl Stream for Receiver {
         match self.shared.state.load(Ordering::Acquire) {
             State::Pending => {
                 self.shared.notify_rx.subscribe(cx);
+
+                if let State::Sent = self.shared.state.load(Ordering::Acquire) {
+                    return PollRecv::Ready(());
+                }
+
                 PollRecv::Pending
             }
-            State::Closed => PollRecv::Ready(()),
+            State::Sent => PollRecv::Ready(()),
         }
     }
 }
@@ -274,9 +279,15 @@ mod tokio_tests {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
             let (mut tx, rx) = super::channel();
 
-            tx.send(()).await.expect("Should send message");
+            spawn(async move {
+                tx.send(()).await.expect("Should send message");
+            });
 
-            assert_rx(rx).await;
+            timeout(TEST_TIMEOUT, async move {
+                assert_rx(rx).await;
+            })
+            .await
+            .expect("test timeout");
         }
     }
 
@@ -285,9 +296,15 @@ mod tokio_tests {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
             let (tx, rx) = super::channel();
 
-            drop(tx);
+            spawn(async move {
+                drop(tx);
+            });
 
-            assert_rx(rx).await;
+            timeout(TEST_TIMEOUT, async move {
+                assert_rx(rx).await;
+            })
+            .await
+            .expect("test timeout");
         }
     }
 
@@ -304,7 +321,9 @@ mod tokio_tests {
                 })
             });
 
-            drop(tx);
+            spawn(async move {
+                drop(tx);
+            });
 
             let rx_handle = spawn(async move {
                 for handle in handles {
@@ -345,7 +364,9 @@ mod async_std_tests {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
             let (mut tx, rx) = super::channel();
 
-            tx.send(()).await.expect("Should send message");
+            spawn(async move {
+                tx.send(()).await.expect("Should send message");
+            });
 
             timeout(TEST_TIMEOUT, async move {
                 assert_rx(rx).await;
@@ -357,10 +378,14 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn simple_drop() {
+        // crate::logging::enable_log();
+
         for _ in 0..CHANNEL_TEST_ITERATIONS {
             let (tx, rx) = super::channel();
 
-            drop(tx);
+            spawn(async move {
+                drop(tx);
+            });
 
             timeout(TEST_TIMEOUT, async move {
                 assert_rx(rx).await;

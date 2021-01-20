@@ -173,9 +173,9 @@ impl<T> StateExtension<T> {
     pub fn push(&self, value: T) {
         let mut lock = self.value.write().unwrap();
         *lock = value;
-        drop(lock);
 
         self.generation.fetch_add(1, Ordering::SeqCst);
+        drop(lock);
     }
 
     pub fn generation(&self, ordering: Ordering) -> usize {
