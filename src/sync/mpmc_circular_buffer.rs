@@ -15,21 +15,16 @@ use std::fmt::Debug;
 
 pub struct MpmcCircularBuffer<T> {
     buffer: Box<[Slot<T>]>,
-    head: RwLock<usize>,
+    head: AtomicUsize,
+    maintenance: RwLock<()>,
     readers: AtomicUsize,
 }
 
 impl<T> Debug for MpmcCircularBuffer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let head = self
-            .head
-            .try_read()
-            .map(|v| (*v).to_string())
-            .unwrap_or("<unknown>".to_string());
-
         f.debug_struct("MpmcCircularBuffer")
             .field("buffer", &self.buffer)
-            .field("head", &head)
+            .field("head", &self.head)
             .field("readers", &self.readers)
             .finish()
     }
@@ -44,17 +39,18 @@ where
         let capacity = max(2, capacity);
         let mut vec = Vec::with_capacity(capacity);
 
-        for i in 0..capacity {
-            vec.push(Slot::new(i));
+        for _ in 0..capacity {
+            vec.push(Slot::new(0));
         }
 
         let this = Self {
             buffer: vec.into_boxed_slice(),
-            head: RwLock::new(0),
+            head: AtomicUsize::new(1),
             readers: AtomicUsize::new(1),
+            maintenance: RwLock::new(()),
         };
 
-        let reader = BufferReader { index: 0 };
+        let reader = BufferReader { index: 1 };
 
         (this, reader)
     }
@@ -78,8 +74,8 @@ impl<T> MpmcCircularBuffer<T> {
 
     pub fn try_write(&self, mut value: T, cx: &Context<'_>) -> TryWrite<T> {
         loop {
-            let mut head_lock = self.head.write().unwrap();
-            let head_id = *head_lock;
+            let _maint = self.maintenance.read().unwrap();
+            let head_id = self.head.load(Ordering::Acquire);
             let head_slot = self.get_slot(head_id);
 
             let readers = self.readers.load(Ordering::Acquire);
@@ -98,8 +94,20 @@ impl<T> MpmcCircularBuffer<T> {
             // if the write is accepted, release the head lock in the closure
             // this minimizes the time head is locked, and allows the move of value to occur after the lock is released
             let try_write = head_slot.try_write(head_id, value, readers, cx, || {
-                *head_lock += 1;
-                drop(head_lock);
+                if let Err(_e) = self.head.compare_exchange(
+                    head_id,
+                    head_id + 1,
+                    Ordering::SeqCst,
+                    Ordering::Relaxed,
+                ) {
+                    #[cfg(feature = "debug")]
+                    log::warn!(
+                        "[{}] Expected {} head value, found {}",
+                        head_id,
+                        head_id + 1,
+                        _e
+                    );
+                }
             });
 
             match try_write {
@@ -130,9 +138,9 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        let head = self.head.read().unwrap();
+        let _maint = self.maintenance.write().unwrap();
+        let index = self.head.load(Ordering::Acquire);
         self.readers.fetch_add(1, Ordering::AcqRel);
-        let index = *head;
 
         self.mark_read_in_range(0, index);
 
@@ -203,7 +211,8 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone_with<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
-        let _head = buffer.head.read().unwrap();
+        // let _head = buffer.head.read().unwrap();
+        let _maint = buffer.maintenance.write().unwrap();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
         let index = self.index;
@@ -216,7 +225,8 @@ impl BufferReader {
     }
 
     pub fn drop_with<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
-        let _head = buffer.head.read().unwrap();
+        // let _head = buffer.head.read().unwrap();
+        let _maint = buffer.maintenance.write().unwrap();
         buffer.readers.fetch_sub(1, Ordering::AcqRel);
 
         for (_id, slot) in buffer.buffer.iter().enumerate() {
@@ -276,24 +286,41 @@ impl<T> Slot<T> {
     where
         OnWrite: FnOnce(),
     {
-        let mut data = self.data.write().unwrap();
+        loop {
+            let prev_index = self.index.load(Ordering::Acquire);
 
-        if data.is_none() || self.reads.load(Ordering::Acquire) >= readers {
+            if prev_index >= index {
+                return SlotTryWrite::Written(value);
+            } else if prev_index != 0 && self.reads.load(Ordering::Acquire) < readers {
+                self.on_release.subscribe(cx);
+
+                if self.reads.load(Ordering::Acquire) >= readers {
+                    #[cfg(feature = "debug")]
+                    log::info!(
+                        "[{}] Reads incremented during write, invalidating subscription",
+                        index
+                    );
+                    continue;
+                }
+
+                return SlotTryWrite::Pending(value);
+            }
+
+            // lock the data, then update the index
+            let mut data = self.data.write().unwrap();
+            if let Err(_) =
+                self.index
+                    .compare_exchange(prev_index, index, Ordering::AcqRel, Ordering::Relaxed)
+            {
+                continue;
+            }
+
             on_write();
-
             *data = Some(value);
             self.reads.store(0, Ordering::Release);
-            self.index.store(index, Ordering::Release);
             self.on_write.notify();
             return SlotTryWrite::Ready;
         }
-
-        if data.is_some() && self.index.load(Ordering::Acquire) >= index {
-            return SlotTryWrite::Written(value);
-        }
-
-        self.on_release.subscribe(cx);
-        SlotTryWrite::Pending(value)
     }
 
     fn mark_read_in_range(&self, min: usize, max: usize, readers: usize) {
