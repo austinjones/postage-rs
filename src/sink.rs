@@ -1,6 +1,6 @@
 //! A sink for values which are asynchronously accepted, until the target is closed.
 //!
-//! Sinks be constructed with a connected receiver using postage channels:
+//! Postage channel senders implement Sink:
 //! ```rust
 //! use postage::mpsc::channel;
 //! use postage::sink::Sink;

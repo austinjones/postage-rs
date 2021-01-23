@@ -1,5 +1,6 @@
 //! A stream of values which are asynchronously produced, until the source is closed.
-//! Streams be constructed with a connected sender using postage channels:
+//!
+//! Postage channel receivers implement Stream:
 //! ```rust
 //! use postage::mpsc::channel;
 //! use postage::sink::Sink;
@@ -29,8 +30,8 @@
 //!     tx.send(true).await;
 //!     drop(tx);
 //!
-//!     while let Some(_v) = rx.recv().await {
-//!         println!("Value received!")
+//!     while let Some(v) = rx.recv().await {
+//!         println!("Value received!: {}", v);
 //!     }
 //! }
 //! ```
