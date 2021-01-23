@@ -1,5 +1,4 @@
-# postage-rs
-<img width=800 src="./readme/postage-banner.svg">
+<img width=950 src="./readme/postage-banner.svg">
 
 **The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/0.3.2/postage/)**
 
