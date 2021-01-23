@@ -1,9 +1,9 @@
 # postage-rs
-The feature-rich, portable async channel library.
+<img width=800 src="./readme/postage-banner.svg">
 
-Postage is in *beta* quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
+**The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/0.3.2/postage/)**
 
-Why use Postage?
+## Why use Postage?
 - Includes a **rich set of channels**, and it works with any async executor (currently regressions are written for tokio and async-std)
   - `mpsc`, a multi-producer, single-consumer channel
   - `broadcast`, a multi-producer, multi-consumer broadcast channel with backpressure (no lagging!)
@@ -14,6 +14,8 @@ Why use Postage?
   - Sinks can be chained, and filtered.
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
+
+Postage is in **beta** quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
 
 ## Channels
 ### postage::mpsc
