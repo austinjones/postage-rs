@@ -1,6 +1,6 @@
 <img width=950 src="./readme/postage-banner.svg">
 
-**The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/0.3.2/postage/)**
+**The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/)**
 
 ## Why use Postage?
 - Includes a **rich set of channels**, and it works with any async executor (currently regressions are written for tokio and async-std)
