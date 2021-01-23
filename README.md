@@ -4,11 +4,11 @@
 
 ## Why use Postage?
 - Includes a **rich set of channels**
-  - `mpsc`, a multi-producer, single-consumer channel
-  - `broadcast`, a multi-producer, multi-consumer broadcast channel with backpressure (no lagging!)
-  - `watch`, a stateful channel where receivers receive an initial value, and updates when the value state changes.
-  - `oneshot`, a transfer channel that can be used once.
-  - `barrier`, a channel that doesn't carry a value, but transmits when the sender half is dropped.
+  - [mpsc](https://docs.rs/postage/latest/postage/mpsc/index.html) 
+  **|** [broadcast](https://docs.rs/postage/latest/postage/broadcast/index.html) 
+  **|** [watch](https://docs.rs/postage/latest/postage/watch/index.html) 
+  **|** [oneshot](https://docs.rs/postage/latest/postage/oneshot/index.html) 
+  **|** [barrier](https://docs.rs/postage/latest/postage/barrier/index.html)
 - Works with **any executor**
   - Currently regressions are written for `tokio` and `async-std`.
 - Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators**
