@@ -3,14 +3,16 @@
 **The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/)**
 
 ## Why use Postage?
-- Includes a **rich set of channels**, and it works with any async executor (currently regressions are written for tokio and async-std)
+- Includes a **rich set of channels**
   - `mpsc`, a multi-producer, single-consumer channel
   - `broadcast`, a multi-producer, multi-consumer broadcast channel with backpressure (no lagging!)
   - `watch`, a stateful channel where receivers receive an initial value, and updates when the value state changes.
   - `oneshot`, a transfer channel that can be used once.
   - `barrier`, a channel that doesn't carry a value, but transmits when the sender half is dropped.
-- Comes with **built-in Stream and Sink combinators**.
-  - Sinks can be chained, and filtered.
+- Works with **any executor**
+  - Currently regressions are written for `tokio` and `async-std`.
+- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators**
+  - Sinks can be chained and filtered.
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
 
