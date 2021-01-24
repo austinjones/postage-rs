@@ -3,16 +3,17 @@
 **The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/)**
 
 ## Why use Postage?
-- Includes a **rich set of channels**
+- Includes a **rich set of channels.**
   - [mpsc](https://docs.rs/postage/latest/postage/mpsc/index.html) 
   **|** [broadcast](https://docs.rs/postage/latest/postage/broadcast/index.html) 
   **|** [watch](https://docs.rs/postage/latest/postage/watch/index.html) 
   **|** [oneshot](https://docs.rs/postage/latest/postage/oneshot/index.html) 
   **|** [barrier](https://docs.rs/postage/latest/postage/barrier/index.html)
-- Works with **any executor**
+- Works with **any executor.**
   - Currently regressions are written for `tokio` and `async-std`.
-- **Throughly tested.**  All channels have full unit test coverage, and integration test coverage with multiple async executors.
-- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators**
+- **Throughly tested.**  
+  - Channels have full unit test coverage, and integration test coverage with multiple async executors.
+- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators.** 
   - Sinks can be chained and filtered.
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
