@@ -39,3 +39,26 @@ Oneshot channels transmit a single value between a sender and a reciever.  Neith
 
 ### postage::barrier
 Barrier channels can be used to synchronize events, but do not transmit any data.  When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  This can be used to asynchronously coordinate actions between tasks.
+
+## Benchmarks
+This section contains performance measurements of postage channels, and comparisons with tokio and async_std channels.
+
+| Package    | Channel   | send/recv    | send full | recv empty |
+| ---------- | --------- | ------------ | --------- | ---------- |
+| mpsc       | postage   | 66ns         | 44ns      | 47ns       |
+| mpsc       | tokio     | 128ns (+90%) | 1ns       | 31ns       |
+| mpmc queue | async_std | 40ns (+65%)  | 9ns       | 10ns       |
+| -          |           |              |           |            |
+| broadcast  | postage   | 140ns        | 8ns       | 8ns        |
+| broadcast  | tokio     | 88ns (-38%)  | 49ns      | 39ns       |
+| -          |           |              |           |            |
+| watch      | postage   | 92ns         | -         | 7ns        |
+| watch      | tokio     | 74ns (-20%)  | -         | 75ns       |
+
+The `send/recv` column measures the total time to store an item on the channel, and recieve the item again.
+
+The `send full` column measures the time to recieve a `Poll::Pending` value on a full channel.
+
+The `recv empty` column measures the time to recieve a `Poll::Pending` value on an empty channel.
+
+All benchmarks were taken with Criterion and are in the `benchmarks` directory.
