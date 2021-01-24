@@ -1,4 +1,5 @@
 //! Oneshot channels transmit a single value between a sender and a reciever.  
+//!
 //! Neither can be cloned.  If the sender drops, the receiver recieves a `None` value.
 use std::sync::Arc;
 

@@ -1,9 +1,7 @@
-//! The broadcast channel provides multi-sender, multi-receiver message dispatch. All receivers are sent every message.
-//! The channel has a fixed capacity, and senders are suspended if the buffer is filled.
+//! Provides a lossless, MPMC channel.  All receivers are guaranteed to recieve each message.
 //!
-//! When a receiver is cloned, both receivers will observe the same series of messages.
-//!
-//! Senders also provide a subscribe() method which adds a receiver on the oldest value.
+//! When a receiver is cloned, the new receive will observe the same series of messages as the original.
+//! When a receiver is created with `Sender::subscribe`, it will observe new messages.
 
 use super::SendMessage;
 use static_assertions::assert_impl_all;

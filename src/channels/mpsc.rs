@@ -1,4 +1,5 @@
 //! A fixed-capacity multi-producer, single-consumer channel.  
+//!
 //! The producer can be cloned, and the sender task is suspended if the channel becomes full.
 
 use super::SendMessage;
