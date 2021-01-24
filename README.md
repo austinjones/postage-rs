@@ -3,15 +3,17 @@
 **The feature-rich, portable async channel library** \> **[crates.io](https://crates.io/crates/postage)** \> **[docs.rs](https://docs.rs/postage/)**
 
 ## Why use Postage?
-- Includes a **rich set of channels**
+- Includes a **rich set of channels.**
   - [mpsc](https://docs.rs/postage/latest/postage/mpsc/index.html) 
   **|** [broadcast](https://docs.rs/postage/latest/postage/broadcast/index.html) 
   **|** [watch](https://docs.rs/postage/latest/postage/watch/index.html) 
   **|** [oneshot](https://docs.rs/postage/latest/postage/oneshot/index.html) 
   **|** [barrier](https://docs.rs/postage/latest/postage/barrier/index.html)
-- Works with **any executor**
+- Works with **any executor.**
   - Currently regressions are written for `tokio` and `async-std`.
-- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators**
+- **Throughly tested.**  
+  - Channels have full unit test coverage, and integration test coverage with multiple async executors.
+- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators.** 
   - Sinks can be chained and filtered.
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
@@ -39,3 +41,24 @@ Oneshot channels transmit a single value between a sender and a reciever.  Neith
 
 ### postage::barrier
 Barrier channels can be used to synchronize events, but do not transmit any data.  When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  This can be used to asynchronously coordinate actions between tasks.
+
+## Benchmarks
+Benchmarks of postage channels, and comparable async-std/tokio channels. 
+
+- `send/recv` measures the total time to send and receive an item.
+- `send full` measures the time to send an item and get a `Poll::Pending` value on a full channel.
+- `recv empty` measures the time to get a `Poll::Pending` value on an empty channel.
+
+All benchmarks were taken with criterion and are in the `benches` directory.
+
+| Package    | Channel   | send/recv    | send full | recv empty |
+| ---------- | --------- | ------------ | --------- | ---------- |
+| mpsc       | postage   | 66ns         | 44ns      | 47ns       |
+| mpsc       | tokio     | 128ns (+90%) | 1ns       | 31ns       |
+| mpmc queue | async_std | 40ns (+65%)  | 9ns       | 10ns       |
+| -          |           |              |           |            |
+| broadcast  | postage   | 140ns        | 8ns       | 8ns        |
+| broadcast  | tokio     | 88ns (-38%)  | 49ns      | 39ns       |
+| -          |           |              |           |            |
+| watch      | postage   | 92ns         | -         | 7ns        |
+| watch      | tokio     | 74ns (-20%)  | -         | 75ns       |
