@@ -11,6 +11,7 @@
   **|** [barrier](https://docs.rs/postage/latest/postage/barrier/index.html)
 - Works with **any executor**
   - Currently regressions are written for `tokio` and `async-std`.
+- **Throughly tested.**  All channels have full unit test coverage, and integration test coverage with multiple async executors.
 - Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators**
   - Sinks can be chained and filtered.
   - Streams can be chained, filtered, mapped, and merged.
