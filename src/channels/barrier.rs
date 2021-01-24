@@ -1,6 +1,6 @@
-//! Barrier channels can be used to synchronize events, but do not transmit any data.  
-//! When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  
-//! This can be used to asynchronously coordinate actions between tasks.
+//! Barriers transmit when the sender half is dropped, and can synchronize events in async tasks.
+//!
+//! The barrier can also be triggered with `tx.send(())`.
 
 use std::sync::Arc;
 

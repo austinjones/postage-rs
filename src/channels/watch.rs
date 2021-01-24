@@ -1,10 +1,8 @@
-//! Watch channels can be used to asynchronously transmit state between tasks
+//! A state distribution channel.  The internal state can be borrowed or cloned, but receivers do not observe every value.
 //!  
-//! When receivers are cloned, they immediately recieve an initial value that is held in the channel.
+//! When the channel is created, the receiver will immediately observe `T::default()`.  Cloned receivers will immediately observe the latest stored value.
 //!
-//! They will also recieve new values, but are not guaranteed to recieve *every* value.
-//!
-//! Values transmitted over watch channels must implement Default.  A simple way to achieve this is to transmit `Option<T>`.
+//! Receivers can also borrow the latest value.
 
 use super::SendSyncMessage;
 use std::{
