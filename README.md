@@ -49,7 +49,7 @@ Benchmarks of postage channels, and comparable async-std/tokio channels.
 - `send full` measures the time to send an item and get a `Poll::Pending` value on a full channel.
 - `recv empty` measures the time to get a `Poll::Pending` value on an empty channel.
 
-All benchmarks were taken with Criterion and are in the `benchmarks` directory.
+All benchmarks were taken with criterion and are in the `benches` directory.
 
 | Package    | Channel   | send/recv    | send full | recv empty |
 | ---------- | --------- | ------------ | --------- | ---------- |
