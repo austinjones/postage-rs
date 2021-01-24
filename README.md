@@ -41,7 +41,9 @@ Oneshot channels transmit a single value between a sender and a reciever.  Neith
 Barrier channels can be used to synchronize events, but do not transmit any data.  When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  This can be used to asynchronously coordinate actions between tasks.
 
 ## Benchmarks
-Benchmarks of postage channels, and comparable async-std/tokio channels.  - `send/recv` measures the total time to send and receive an item.
+Benchmarks of postage channels, and comparable async-std/tokio channels. 
+
+- `send/recv` measures the total time to send and receive an item.
 - `send full` measures the time to send an item and get a `Poll::Pending` value on a full channel.
 - `recv empty` measures the time to get a `Poll::Pending` value on an empty channel.
 
