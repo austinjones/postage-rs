@@ -10,7 +10,17 @@ name: Continuous Integration
 jobs:
   dependencies:
     name: cargo build | dependencies
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -19,7 +29,7 @@ jobs:
         name: cache
         uses: austinjones/rust-cache@v1
         with:
-          key: ci2
+          key: ci-${{ matrix.os }}
 
       - name: cargo build | dependencies
         uses: actions-rs/cargo@v1
@@ -61,7 +71,7 @@ jobs:
         name: cache
         uses: austinjones/rust-cache@v1
         with:
-          key: ci2
+          key: ci-ubuntu-latest
 
       - name: cargo check
         uses: actions-rs/cargo@v1
@@ -82,7 +92,16 @@ jobs:
   test:
     name: cargo test
     needs: dependencies
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -91,7 +110,7 @@ jobs:
         name: cache
         uses: austinjones/rust-cache@v1
         with:
-          key: ci2
+          key: ci-${{ matrix.os }}
 
       - uses: actions-rs/cargo@v1
         name: cargo test --all-features
