@@ -141,7 +141,7 @@ pub trait Stream {
     /// Returns:
     /// - `Ok(value)` if a message is ready.
     /// - `TryRecvError::Pending` if the stream is open, but no messages are available.
-    /// - `TryRecvError::Rejected` if the stream has been closed.
+    /// - `TryRecvError::Closed` if the stream has been closed.
     fn try_recv(&mut self) -> Result<Self::Item, TryRecvError>
     where
         Self: Unpin,
