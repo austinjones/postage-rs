@@ -4,11 +4,12 @@
 
 ## Why use Postage?
 - Includes a **rich set of channels.**
-  - [mpsc](https://docs.rs/postage/latest/postage/mpsc/index.html) 
-  **|** [broadcast](https://docs.rs/postage/latest/postage/broadcast/index.html) 
-  **|** [watch](https://docs.rs/postage/latest/postage/watch/index.html) 
-  **|** [oneshot](https://docs.rs/postage/latest/postage/oneshot/index.html) 
   **|** [barrier](https://docs.rs/postage/latest/postage/barrier/index.html)
+  **|** [broadcast](https://docs.rs/postage/latest/postage/broadcast/index.html)
+  **|** [dispatch](https://docs.rs/postage/latest/postage/dispatch/index.html) 
+  **|** [mpsc](https://docs.rs/postage/latest/postage/mpsc/index.html) 
+  **|** [oneshot](https://docs.rs/postage/latest/postage/oneshot/index.html) 
+  **|** [watch](https://docs.rs/postage/latest/postage/watch/index.html) 
 - Works with **any executor.**
   - Currently regressions are written for `tokio` and `async-std`.
 - **Throughly tested.**  
