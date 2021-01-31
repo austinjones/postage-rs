@@ -63,10 +63,6 @@ impl<T> Sink for Sender<T> {
                     return PollSend::Ready;
                 }
                 Err(v) => {
-                    if self.shared.is_closed() {
-                        return PollSend::Rejected(v);
-                    }
-
                     self.shared.subscribe_recv(cx);
                     if guard.is_expired() {
                         value = v;

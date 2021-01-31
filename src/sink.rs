@@ -306,12 +306,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Sink;
-    use crate::test::sink::ready;
-
     #[cfg(feature = "blocking")]
     #[test]
     fn test_blocking() {
+        use super::Sink;
+        use crate::test::sink::ready;
+
         let mut stream = ready();
         assert_eq!(Ok(()), stream.blocking_send(1usize));
     }

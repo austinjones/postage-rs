@@ -42,26 +42,29 @@ impl<T> Transfer<T> {
     }
 
     pub fn recv(&self, cx: &Context<'_>) -> PollRecv<T> {
-        match self.value.try_recv() {
-            Ok(value) => PollRecv::Ready(value),
-            Err(TryRecvError::Pending) => {
-                if let State::Dead = self.sender.load(Ordering::Acquire) {
-                    return match self.value.try_recv() {
-                        Ok(v) => PollRecv::Ready(v),
-                        Err(TryRecvError::Pending) => PollRecv::Closed,
-                        Err(TryRecvError::Closed) => PollRecv::Closed,
-                    };
-                }
+        loop {
+            let guard = self.notify_rx.guard();
+            match self.value.try_recv() {
+                Ok(value) => return PollRecv::Ready(value),
+                Err(TryRecvError::Pending) => {
+                    if let State::Dead = self.sender.load(Ordering::Acquire) {
+                        return match self.value.try_recv() {
+                            Ok(v) => PollRecv::Ready(v),
+                            Err(TryRecvError::Pending) => PollRecv::Closed,
+                            Err(TryRecvError::Closed) => PollRecv::Closed,
+                        };
+                    }
 
-                self.notify_rx.subscribe(cx);
+                    self.notify_rx.subscribe(cx);
 
-                match self.value.try_recv() {
-                    Ok(v) => PollRecv::Ready(v),
-                    Err(TryRecvError::Pending) => PollRecv::Pending,
-                    Err(TryRecvError::Closed) => PollRecv::Closed,
+                    if guard.is_expired() {
+                        continue;
+                    }
+
+                    return PollRecv::Pending;
                 }
+                Err(TryRecvError::Closed) => return PollRecv::Closed,
             }
-            Err(TryRecvError::Closed) => PollRecv::Closed,
         }
     }
 

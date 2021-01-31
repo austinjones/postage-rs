@@ -17,7 +17,7 @@ impl Notifier {
     }
 
     pub fn guard<'a>(&'a self) -> NotificationGuard<'a> {
-        let generation = self.generation.load(Ordering::Acquire);
+        let generation = self.generation.load(Ordering::Relaxed);
 
         NotificationGuard {
             generation,
@@ -60,6 +60,6 @@ pub struct NotificationGuard<'a> {
 
 impl<'a> NotificationGuard<'a> {
     pub fn is_expired(&self) -> bool {
-        self.stored_generation.load(Ordering::Acquire) != self.generation
+        self.stored_generation.load(Ordering::Relaxed) != self.generation
     }
 }

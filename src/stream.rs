@@ -322,12 +322,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::Stream;
-    use crate::test::stream::ready;
 
     #[cfg(feature = "blocking")]
     #[test]
     fn test_blocking() {
+        use super::Stream;
+        use crate::test::stream::ready;
+
         let mut stream = ready(1usize);
         assert_eq!(Some(1usize), stream.blocking_recv());
     }
