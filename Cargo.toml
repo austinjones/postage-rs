@@ -19,6 +19,7 @@ crossbeam-queue = "0.3"
 atomic = "0.5"
 static_assertions = "1.1.0"
 thiserror = "1.0"
+pollster = { version = "0.2", optional = true }
 log = { version = "0.4", optional = true }
 simple_logger = { version = "1.11.0", optional = true }
 
@@ -58,11 +59,13 @@ harness = false
 
 
 [features]
-default = ["logging"]
+default = ["logging", "blocking"]
 # enables combinators that log their messages
 logging = ["log"]
 # enables debug log statements.  disabled by default in production builds as they are *very verbose*
 debug = ["log", "simple_logger"]
+# enables blocking send and receive
+blocking = ["pollster"]
 
 # [[example]]
 # name = "tokio"
