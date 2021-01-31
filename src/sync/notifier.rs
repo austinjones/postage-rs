@@ -1,19 +1,33 @@
+use atomic::Ordering;
 use crossbeam_queue::SegQueue;
-use std::task::Waker;
+use std::{sync::atomic::AtomicUsize, task::Waker};
 
 #[derive(Debug)]
 pub struct Notifier {
+    generation: AtomicUsize,
     wakers: SegQueue<Waker>,
 }
 
 impl Notifier {
     pub fn new() -> Self {
         Self {
+            generation: AtomicUsize::new(0),
             wakers: SegQueue::new(),
         }
     }
 
+    pub fn guard<'a>(&'a self) -> NotificationGuard<'a> {
+        let generation = self.generation.load(Ordering::Acquire);
+
+        NotificationGuard {
+            generation,
+            stored_generation: &self.generation,
+        }
+    }
+
     pub fn notify(&self) {
+        self.generation.fetch_add(1, Ordering::AcqRel);
+
         #[cfg(feature = "debug")]
         let mut woken = 0usize;
 
@@ -36,5 +50,16 @@ impl Notifier {
         if let Some(waker) = cx.waker() {
             self.wakers.push(waker.clone());
         }
+    }
+}
+
+pub struct NotificationGuard<'a> {
+    generation: usize,
+    stored_generation: &'a AtomicUsize,
+}
+
+impl<'a> NotificationGuard<'a> {
+    pub fn is_expired(&self) -> bool {
+        self.stored_generation.load(Ordering::Acquire) != self.generation
     }
 }

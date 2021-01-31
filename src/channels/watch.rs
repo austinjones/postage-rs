@@ -112,22 +112,25 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
     ) -> PollRecv<Self::Item> {
-        match self.try_recv_internal() {
-            TryRecv::Pending => {
-                self.shared.subscribe_send(cx);
+        loop {
+            let guard = self.shared.send_guard();
 
-                match self.try_recv_internal() {
-                    TryRecv::Pending => {
-                        if self.shared.is_closed() {
-                            return PollRecv::Closed;
-                        }
-
-                        PollRecv::Pending
+            match self.try_recv_internal() {
+                TryRecv::Pending => {
+                    if self.shared.is_closed() {
+                        return PollRecv::Closed;
                     }
-                    TryRecv::Ready(v) => PollRecv::Ready(v),
+
+                    self.shared.subscribe_send(cx);
+
+                    if guard.is_expired() {
+                        continue;
+                    }
+
+                    return PollRecv::Pending;
                 }
+                TryRecv::Ready(v) => return PollRecv::Ready(v),
             }
-            TryRecv::Ready(v) => PollRecv::Ready(v),
         }
     }
 }
