@@ -2,14 +2,14 @@
 //!  
 //! When the channel is created, the receiver will immediately observe `T::default()`.  Cloned receivers will immediately observe the latest stored value.
 //!
-//! Receivers can also borrow the latest value.
+//! Senders can mutably borrow the contained value (which notifies receivers on release).  Receivers can immutably borrow the contained value.
 
 use super::SendSyncMessage;
 use std::{
-    ops::Deref,
+    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicUsize, Ordering},
-        RwLock, RwLockReadGuard,
+        RwLock, RwLockReadGuard, RwLockWriteGuard,
     },
 };
 
@@ -21,12 +21,17 @@ use crate::{
     sync::{shared, ReceiverShared, SenderShared},
 };
 
-/// Constructs a new watch channel pair, filled with T::default()
+/// Constructs a new watch channel pair, filled with `T::default()`
 pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
+    channel_with(T::default())
+}
+
+/// Constructs a new watch channel pair, filled with the provided value
+pub fn channel_with<T: Clone>(value: T) -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
     log::error!("Creating watch channel");
 
-    let (tx_shared, rx_shared) = shared(StateExtension::new(T::default()));
+    let (tx_shared, rx_shared) = shared(StateExtension::new(value));
     let sender = Sender { shared: tx_shared };
 
     let receiver = Receiver {
@@ -61,6 +66,29 @@ impl<T> Sink for Sender<T> {
         self.shared.notify_receivers();
 
         PollSend::Ready
+    }
+}
+
+impl<T> Sender<T> {
+    /// Mutably borrows the contained value, blocking the channel while the borrow is held.
+    ///
+    /// After the borrow is released, receivers will be notified of a new value.
+    pub fn borrow_mut<'s>(&'s mut self) -> RefMut<'s, T> {
+        let extension = self.shared.extension();
+        let lock = extension.value.write().unwrap();
+
+        RefMut {
+            lock,
+            shared: self.shared.clone(),
+        }
+    }
+
+    /// Immutably borrows the contained value, blocking the channel while the borrow is held.
+    pub fn borrow<'s>(&'s mut self) -> Ref<'s, T> {
+        let extension = self.shared.extension();
+        let lock = extension.value.read().unwrap();
+
+        Ref { lock }
     }
 }
 
@@ -137,8 +165,38 @@ impl<T> Clone for Receiver<T> {
         }
     }
 }
+
+/// A mutable reference to the value contained in the channel.
+/// Receivers are notified when the borrow is released.
+pub struct RefMut<'t, T> {
+    lock: RwLockWriteGuard<'t, T>,
+    shared: SenderShared<StateExtension<T>>,
+}
+
+impl<'t, T> DerefMut for RefMut<'t, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut *self.lock
+    }
+}
+
+impl<'t, T> Deref for RefMut<'t, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.lock
+    }
+}
+
+impl<'t, T> Drop for RefMut<'t, T> {
+    fn drop(&mut self) {
+        self.shared.extension().increment();
+        self.shared.notify_receivers();
+    }
+}
+
+/// An immutable reference to the value contained in the channel.
 pub struct Ref<'t, T> {
-    pub(in crate::channels::watch) lock: RwLockReadGuard<'t, T>,
+    lock: RwLockReadGuard<'t, T>,
 }
 
 impl<'t, T> Deref for Ref<'t, T> {
@@ -150,6 +208,7 @@ impl<'t, T> Deref for Ref<'t, T> {
 }
 
 impl<T> Receiver<T> {
+    /// Borrows the value in the channel, blocking the channel while the value is held.
     pub fn borrow(&self) -> Ref<'_, T> {
         let lock = self.shared.extension().value.read().unwrap();
         Ref { lock }
@@ -175,6 +234,10 @@ impl<T> StateExtension<T> {
 
         self.generation.fetch_add(1, Ordering::SeqCst);
         drop(lock);
+    }
+
+    pub fn increment(&self) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
     }
 
     pub fn generation(&self, ordering: Ordering) -> usize {
@@ -268,6 +331,33 @@ mod tests {
         );
 
         assert_eq!(&State(1), &*rx.borrow());
+    }
+
+    #[test]
+    fn borrow_mut_notifies() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        let (w1, w1_count) = new_count_waker();
+        let w1_context = Context::from_waker(&w1);
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
+        );
+
+        *tx.borrow_mut() = State(1);
+        assert_eq!(1, w1_count.get());
+        assert_eq!(&State(1), &*rx.borrow());
+
+        assert_eq!(
+            PollRecv::Ready(State(1)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
     }
 
     #[test]
@@ -421,6 +511,29 @@ mod tokio_tests {
     }
 
     #[tokio::test]
+    async fn send_borrow_mut() {
+        let (mut tx, mut rx) = super::channel();
+
+        tokio::task::spawn(async move {
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                *tx.borrow_mut() = message;
+            }
+        });
+
+        timeout(TEST_TIMEOUT, async move {
+            let mut channel = Channel::new(0).allow_skips();
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        })
+        .await
+        .expect("test timeout");
+    }
+
+    #[tokio::test]
     async fn multi_receiver() {
         let (mut tx, rx) = super::channel();
 
@@ -474,6 +587,29 @@ mod async_std_tests {
             iter.next();
             for message in iter {
                 tx.send(message).await.expect("send failed");
+            }
+        });
+
+        timeout(TEST_TIMEOUT, async move {
+            let mut channel = Channel::new(0).allow_skips();
+            while let Some(message) = rx.recv().await {
+                channel.assert_message(&message);
+            }
+        })
+        .await
+        .expect("test timeout");
+    }
+
+    #[async_std::test]
+    async fn send_borrow_mut() {
+        let (mut tx, mut rx) = super::channel();
+
+        spawn(async move {
+            let mut iter = Message::new_iter(0);
+            // skip state 0
+            iter.next();
+            for message in iter {
+                *tx.borrow_mut() = message;
             }
         });
 
