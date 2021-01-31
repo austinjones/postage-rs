@@ -121,14 +121,18 @@ pub trait Stream {
     type Item;
 
     /// Attempts to retrieve an item from the stream, without blocking.
-    /// Returns `PollRecv::Ready(value)` if a message is ready
-    /// Returns `PollRecv::Pending` if the stream is open, but no message is currently available.
-    /// Returns `PollRecv::Closed` if the stream is closed, and no messages are expected.
+    ///
+    /// Returns:
+    /// - `PollRecv::Ready(value)` if a message is ready
+    /// - `PollRecv::Pending` if the stream is open, but no message is currently available.
+    /// - `PollRecv::Closed` if the stream is closed, and no messages are expected.
     fn poll_recv(self: Pin<&mut Self>, cx: &mut Context<'_>) -> PollRecv<Self::Item>;
 
     /// Retrieves a message from the stream.
-    /// Resolves to `Some(value)` if the stream is open
-    /// Resolves to `None` if the stream is closed, and no further messages are expected.
+    ///
+    /// Returns:
+    /// - `Some(value)` if the stream is open
+    /// - `None` if the stream is closed, and no further messages are expected.
     fn recv(&mut self) -> RecvFuture<'_, Self>
     where
         Self: Unpin,
@@ -141,7 +145,7 @@ pub trait Stream {
     /// Returns:
     /// - `Ok(value)` if a message is ready.
     /// - `TryRecvError::Pending` if the stream is open, but no messages are available.
-    /// - `TryRecvError::Closed` if the stream has been closed.
+    /// - `TryRecvError::Closed` if the stream has been closed, and no items are expected.
     fn try_recv(&mut self) -> Result<Self::Item, TryRecvError>
     where
         Self: Unpin,
@@ -153,6 +157,19 @@ pub trait Stream {
             PollRecv::Pending => Err(TryRecvError::Pending),
             PollRecv::Closed => Err(TryRecvError::Closed),
         }
+    }
+
+    /// Retrieves a message from the stream, blocking the current thread until one is available.
+    ///
+    /// Returns:
+    /// - `Some(value)` if the stream is open
+    /// - `None` if the stream is closed, and no further messages are expected.
+    #[cfg(feature = "blocking")]
+    fn blocking_recv(&mut self) -> Option<Self::Item>
+    where
+        Self: Unpin,
+    {
+        pollster::block_on(self.recv())
     }
 
     /// Transforms the stream with a map function.
@@ -300,5 +317,18 @@ where
             PollRecv::Pending => Poll::Pending,
             PollRecv::Closed => Poll::Ready(None),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Stream;
+    use crate::test::stream::ready;
+
+    #[cfg(feature = "blocking")]
+    #[test]
+    fn test_blocking() {
+        let mut stream = ready(1usize);
+        assert_eq!(Some(1usize), stream.blocking_recv());
     }
 }

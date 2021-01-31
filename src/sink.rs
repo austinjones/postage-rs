@@ -127,7 +127,11 @@ pub trait Sink {
     type Item;
 
     /// Attempts to accept the message, without blocking.  
-    /// Returns PollSend::Ready, PollSend::Pending(value), or PollSend::Rejected(value)
+    ///
+    /// Returns:
+    /// - `PollSend::Ready` if the value was sent
+    /// - `PollSend::Pending(value)` if the channel is full.  The channel will call the waker in `cx` when the item may be accepted in the future.
+    /// - `PollSend::Rejected(value)` if the channel is closed, and will never accept the item.
     fn poll_send(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -136,8 +140,9 @@ pub trait Sink {
 
     /// Attempts to send a message into the sink.  
     ///
-    /// Returns `Ok(())` if the value was accepted.
-    /// Returns `Err(SendError(value))` if the sink rejected the message.
+    /// Returns:
+    /// - `Ok(())` if the value was accepted.
+    /// - `Err(SendError(value))` if the sink rejected the message.
     fn send(&mut self, value: Self::Item) -> SendFuture<Self> {
         SendFuture::new(self, value)
     }
@@ -146,8 +151,8 @@ pub trait Sink {
     ///
     /// Returns:
     /// - `Ok(())` if the value was accepted.
-    /// - `Err(TrySendError::Pending(value))` if the send would have blocked
-    /// - `Err(TrySendError::Rejected(value))` if the value was rejected
+    /// - `Err(TrySendError::Pending(value))` if the channel is full, and cannot accept the item at this time.
+    /// - `Err(TrySendError::Rejected(value))` if the channel is closed, and will never accept the item.
     fn try_send(&mut self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
     where
         Self: Unpin,
@@ -159,6 +164,17 @@ pub trait Sink {
             PollSend::Pending(value) => Err(TrySendError::Pending(value)),
             PollSend::Rejected(value) => Err(TrySendError::Rejected(value)),
         }
+    }
+
+    /// Sends a message over the channel, blocking the current thread until the message is sent.
+    ///
+    /// Requires the `blocking` feature (enabled by default).
+    #[cfg(feature = "blocking")]
+    fn blocking_send(&mut self, value: Self::Item) -> Result<(), SendError<Self::Item>>
+    where
+        Self: Unpin,
+    {
+        pollster::block_on(self.send(value))
     }
 
     /// Chains two sink implementations.  Messages will be transmitted to the argument until it rejects a message.
@@ -285,5 +301,18 @@ where
             }
             PollSend::Rejected(value) => Poll::Ready(Err(SendError(value))),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Sink;
+    use crate::test::sink::ready;
+
+    #[cfg(feature = "blocking")]
+    #[test]
+    fn test_blocking() {
+        let mut stream = ready();
+        assert_eq!(Ok(()), stream.blocking_send(1usize));
     }
 }
