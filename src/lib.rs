@@ -30,6 +30,7 @@ mod sync;
 
 pub use channels::barrier;
 pub use channels::broadcast;
+pub use channels::dispatch;
 pub use channels::mpsc;
 pub use channels::oneshot;
 pub use channels::watch;

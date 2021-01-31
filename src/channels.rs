@@ -1,5 +1,6 @@
 pub mod barrier;
 pub mod broadcast;
+pub mod dispatch;
 pub mod mpsc;
 pub mod oneshot;
 pub mod watch;
