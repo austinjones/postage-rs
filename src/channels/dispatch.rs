@@ -13,6 +13,7 @@ use crate::{
 use crossbeam_queue::ArrayQueue;
 use static_assertions::assert_impl_all;
 
+/// Constructs a pair of dispatch endpoints, with a fixed-size buffer of the given capacity
 pub fn channel<T>(capacity: usize) -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
     log::error!("Creating dispatch channel with capacity {}", capacity);

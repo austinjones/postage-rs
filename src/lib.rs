@@ -3,9 +3,9 @@
 //! # Why use Postage?
 //! - Includes a **rich set of channels.**
 //!   - `barrier`, a oneshot channel that transmits when the sender half is dropped.
-//!   - `broadcast`, a lossless multi-producer, multi-consumer broadcast channel with backpressure (no lagging!)
-//!   - `dispatch`, a multi-producer, multi-consumer queue
-//!   - `mpsc`, a multi-producer, single-consumer channel
+//!   - `broadcast`, a lossless multi-producer, multi-consumer broadcast channel with backpressure (no lagging!).
+//!   - `dispatch`, a multi-producer, multi-consumer queue.
+//!   - `mpsc`, a multi-producer, single-consumer channel.
 //!   - `oneshot`, a oneshot transfer channel.
 //!   - `watch`, a state distribution channel with a value that can be borrowed.
 //! - Works with **any executor.**

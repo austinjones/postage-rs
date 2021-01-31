@@ -21,7 +21,7 @@ use crate::{
     sync::{shared, ReceiverShared, SenderShared},
 };
 
-/// Constructs a new watch channel pair, filled with `T::default()`
+/// Constructs a new watch channel pair, filled with `T::default()`.
 pub fn channel<T: Clone + Default>() -> (Sender<T>, Receiver<T>) {
     channel_with(T::default())
 }

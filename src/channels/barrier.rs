@@ -13,7 +13,7 @@ use crate::{
     sync::notifier::Notifier,
 };
 
-/// Constructs a pair of barrier endpoints
+/// Constructs a pair of barrier endpoints, which transmits when the sender is dropped.
 pub fn channel() -> (Sender, Receiver) {
     #[cfg(feature = "debug")]
     log::error!("Creating barrier channel");

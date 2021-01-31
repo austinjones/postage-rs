@@ -11,6 +11,7 @@ use crate::{
 };
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
+/// Constructs a pair of oneshot endpoints
 pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
     #[cfg(feature = "debug")]
     log::error!("Creating oneshot channel");
