@@ -2,7 +2,7 @@
 //!  
 //! When the channel is created, the receiver will immediately observe `T::default()`.  Cloned receivers will immediately observe the latest stored value.
 //!
-//! Senders can mutably borrow the contained value, which will notify receivers.  Receivers can immutably borrow the contained value.
+//! Senders can mutably borrow the contained value (which notifies receivers on release).  Receivers can immutably borrow the contained value.
 
 use super::SendSyncMessage;
 use std::{
