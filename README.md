@@ -19,8 +19,6 @@
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
 
-Postage is in **beta** quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
-
 ## Channels
 ### postage::barrier
 Barrier channels can be used to synchronize events, but do not transmit any data.  When the sender is dropped (or `tx.send(())` is called), the receiver is awoken.  This can be used to asynchronously coordinate actions between tasks.
