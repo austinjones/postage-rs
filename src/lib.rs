@@ -17,8 +17,6 @@
 //!   - Streams can be chained, filtered, mapped, and merged.
 //!   - With the `logging` feature, Sinks and streams can log their values.  This is really helpful when debugging applications.
 //!
-//! Postage is in *beta* quality.  The functionality is implemented and has unit/integration test coverage.  But it needs to be tested on more hardware, and more operating systems.
-//!
 //! See [the readme](https://github.com/austinjones/postage-rs#benchmarks) for benchmarks.
 
 mod channels;
