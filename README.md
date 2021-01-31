@@ -59,14 +59,14 @@ All benchmarks were taken with criterion and are in the `benches` directory.
 
 | Package   | Channel   | send/recv    | send full | recv empty |
 | --------- | --------- | ------------ | --------- | ---------- |
-| broadcast | postage   | 140ns        | 8ns       | 8ns        |
+| broadcast | postage   | 144ns        | 6ns       | 7ns        |
 | broadcast | tokio     | 88ns (-38%)  | 49ns      | 39ns       |
 | -         |           |              |           |            |
-| dispatch  | postage   | 64ns         | 44ns      | 24ns       |
-| dispatch  | async_std | 41ns (-36%)  | 10ns      | 10ns       |
+| dispatch  | postage   | 87ns         | 26ns      | 26ns       |
+| dispatch  | async_std | 41ns (-52%)  | 10ns      | 10ns       |
 | -         |           |              |           |            |
-| mpsc      | postage   | 66ns         | 44ns      | 47ns       |
-| mpsc      | tokio     | 128ns (+90%) | 1ns       | 31ns       |
+| mpsc      | postage   | 79ns         | 25ns      | 27ns       |
+| mpsc      | tokio     | 132ns (+67%) | 1ns       | 31ns       |
 | -         |           |              |           |            |
-| watch     | postage   | 92ns         | -         | 7ns        |
-| watch     | tokio     | 74ns (-20%)  | -         | 75ns       |
+| watch     | postage   | 96ns         | -         | 7ns        |
+| watch     | tokio     | 74ns (-22%)  | -         | 75ns       |

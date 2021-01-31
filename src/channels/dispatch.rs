@@ -47,32 +47,29 @@ impl<T> Sink for Sender<T> {
     fn poll_send(
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
-        value: Self::Item,
+        mut value: Self::Item,
     ) -> PollSend<Self::Item> {
-        if self.shared.is_closed() {
-            return PollSend::Rejected(value);
-        }
-
-        let queue = &self.shared.extension().queue;
-
-        match queue.push(value) {
-            Ok(_) => {
-                self.shared.notify_receivers();
-                PollSend::Ready
+        loop {
+            if self.shared.is_closed() {
+                return PollSend::Rejected(value);
             }
-            Err(v) => {
-                self.shared.subscribe_recv(cx);
 
-                if self.shared.is_closed() {
-                    return PollSend::Rejected(v);
+            let queue = &self.shared.extension().queue;
+            let guard = self.shared.recv_guard();
+
+            match queue.push(value) {
+                Ok(_) => {
+                    self.shared.notify_receivers();
+                    return PollSend::Ready;
                 }
-
-                match queue.push(v) {
-                    Ok(_) => {
-                        self.shared.notify_receivers();
-                        PollSend::Ready
+                Err(v) => {
+                    self.shared.subscribe_recv(cx);
+                    if guard.is_expired() {
+                        value = v;
+                        continue;
                     }
-                    Err(v) => PollSend::Pending(v),
+
+                    return PollSend::Pending(v);
                 }
             }
         }
@@ -103,29 +100,24 @@ impl<T> Stream for Receiver<T> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut crate::Context<'_>,
     ) -> PollRecv<Self::Item> {
-        match self.shared.extension().queue.pop() {
-            Some(v) => {
-                self.shared.notify_senders();
-                PollRecv::Ready(v)
-            }
-            None => {
-                if self.shared.is_closed() {
-                    return PollRecv::Closed;
+        loop {
+            let guard = self.shared.send_guard();
+            match self.shared.extension().queue.pop() {
+                Some(v) => {
+                    self.shared.notify_senders();
+                    return PollRecv::Ready(v);
                 }
-
-                self.shared.subscribe_send(cx);
-
-                match self.shared.extension().queue.pop() {
-                    Some(v) => {
-                        self.shared.notify_senders();
-                        PollRecv::Ready(v)
+                None => {
+                    if self.shared.is_closed() {
+                        return PollRecv::Closed;
                     }
-                    None => {
-                        if self.shared.is_closed() {
-                            return PollRecv::Closed;
-                        }
-                        PollRecv::Pending
+
+                    self.shared.subscribe_send(cx);
+                    if guard.is_expired() {
+                        continue;
                     }
+
+                    return PollRecv::Pending;
                 }
             }
         }

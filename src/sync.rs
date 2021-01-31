@@ -6,7 +6,7 @@ use std::fmt::Debug;
 
 use crate::Context;
 
-use self::ref_count::TryDecrement;
+use self::{notifier::NotificationGuard, ref_count::TryDecrement};
 
 pub mod mpmc_circular_buffer;
 pub mod notifier;
@@ -72,6 +72,10 @@ impl<E> SenderShared<E> {
         self.inner.sender_notify.subscribe(cx);
     }
 
+    pub fn recv_guard<'a>(&'a self) -> NotificationGuard<'a> {
+        self.inner.sender_notify.guard()
+    }
+
     pub fn is_alive(&self) -> bool {
         self.inner.receiver_count.is_alive()
     }
@@ -133,6 +137,10 @@ impl<E> ReceiverShared<E> {
 
     pub fn subscribe_send(&self, cx: &Context<'_>) {
         self.inner.receiver_notify.subscribe(cx);
+    }
+
+    pub fn send_guard<'a>(&'a self) -> NotificationGuard<'a> {
+        self.inner.receiver_notify.guard()
     }
 
     pub fn is_alive(&self) -> bool {
