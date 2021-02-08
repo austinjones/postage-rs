@@ -10,6 +10,7 @@
 //!   - `watch`, a state distribution channel with a value that can be borrowed.
 //! - Works with **any executor.**
 //!   - Currently regressions are written for `tokio` and `async-std`.
+//!   - With the `futures-traits` feature, channels implement the futures `Sink/Stream` traits.
 //! - **Throughly tested.**  
 //!   - Channels have full unit test coverage, and integration test coverage with multiple async executors.
 //! - Comes with **built-in Stream and Sink combinators.**
