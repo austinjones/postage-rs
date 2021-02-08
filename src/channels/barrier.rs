@@ -59,6 +59,52 @@ impl Sink for Sender {
     }
 }
 
+#[cfg(feature = "futures-traits")]
+mod impl_futures {
+    use super::State;
+    use crate::sink::SendError;
+    use atomic::Ordering;
+    use std::task::{Context, Poll};
+
+    impl futures::sink::Sink<()> for super::Sender {
+        type Error = SendError<()>;
+
+        fn poll_ready(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            match self.shared.state.load(Ordering::Acquire) {
+                State::Pending => Poll::Ready(Ok(())),
+                State::Sent => Poll::Ready(Err(SendError(()))),
+            }
+        }
+
+        fn start_send(self: std::pin::Pin<&mut Self>, _item: ()) -> Result<(), Self::Error> {
+            match self.shared.state.load(Ordering::Acquire) {
+                State::Pending => {
+                    self.shared.close();
+                    Ok(())
+                }
+                State::Sent => Err(SendError(())),
+            }
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+}
+
 impl Drop for Sender {
     fn drop(&mut self) {
         self.shared.close();

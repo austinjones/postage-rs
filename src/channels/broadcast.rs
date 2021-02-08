@@ -33,6 +33,8 @@ pub fn channel<T: Clone>(capacity: usize) -> (Sender<T>, Receiver<T>) {
 /// A broadcast sender that can be used with the postage::Sink trait.  Can be cloned.
 ///
 /// The sender task is suspended when the internal buffer is filled.
+///
+/// Note: no implementation of the `futures::Sink` trait is provided for the broadcast Sender.
 pub struct Sender<T> {
     pub(in crate::channels::broadcast) shared: SenderShared<MpmcCircularBuffer<T>>,
 }
