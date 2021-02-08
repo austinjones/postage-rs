@@ -207,7 +207,7 @@ mod tests {
     fn full_send_blocks() {
         // SimpleLogger::new().init().unwrap();
         let mut cx = panic_context();
-        let (mut tx, _rx) = channel(2);
+        let (tx, _rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn empty_send_recv() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel(0);
+        let (tx, mut rx) = channel(0);
 
         assert_eq!(
             PollSend::Ready,
@@ -258,7 +258,7 @@ mod tests {
     fn sender_subscribe_same_read() {
         // crate::logging::enable_log();
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -286,7 +286,7 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = noop_context();
-        let (mut tx, _rx) = channel(2);
+        let (tx, _rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -310,8 +310,8 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(2);
-        let mut tx2 = tx.clone();
+        let (tx, mut rx) = channel(2);
+        let tx2 = tx.clone();
 
         assert_eq!(
             PollSend::Ready,
@@ -351,7 +351,7 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
         let mut rx2 = rx.clone();
 
         assert_eq!(
@@ -397,8 +397,8 @@ mod tests {
     #[test]
     fn sender_disconnect() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(100);
-        let mut tx2 = tx.clone();
+        let (tx, mut rx) = channel(100);
+        let tx2 = tx.clone();
 
         assert_eq!(
             PollSend::Ready,
@@ -424,7 +424,7 @@ mod tests {
     #[test]
     fn receiver_disconnect() {
         let mut cx = panic_context();
-        let (mut tx, rx) = channel(100);
+        let (tx, rx) = channel(100);
         let rx2 = rx.clone();
 
         assert_eq!(
@@ -442,7 +442,7 @@ mod tests {
     #[test]
     fn receiver_reconnect() {
         let mut cx = panic_context();
-        let (mut tx, rx) = channel(100);
+        let (tx, rx) = channel(100);
 
         assert_eq!(
             PollSend::Ready,
@@ -466,7 +466,7 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -508,7 +508,7 @@ mod tests {
     #[test]
     fn wake_receiver() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(100);
+        let (tx, mut rx) = channel(100);
 
         let (w1, w1_count) = new_count_waker();
         let w1_context = Context::from_waker(&w1);
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn dropping_receiver_does_not_block() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
         let rx2 = rx.clone();
 
         assert_eq!(
@@ -572,7 +572,7 @@ mod tests {
     fn drop_receiver_frees_slot() {
         // crate::logging::enable_log();
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
         let rx2 = rx.clone();
 
         assert_eq!(
@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn wake_sender_on_disconnect() {
-        let (mut tx, rx) = channel(2);
+        let (tx, rx) = channel(2);
 
         let (w1, w1_count) = new_count_waker();
         let w1_context = Context::from_waker(&w1);
@@ -650,7 +650,7 @@ mod tests {
     #[test]
     fn reader_bounds_bug() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -676,7 +676,7 @@ mod tests {
         // SimpleLogger::new().init().unwrap();
 
         let mut cx = noop_context();
-        let (mut tx, rx) = channel(2);
+        let (tx, rx) = channel(2);
 
         drop(rx);
         let mut rx2 = tx.subscribe();
@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn skips_intermediate_bug() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel(2);
+        let (tx, rx) = channel(2);
 
         drop(rx);
         let mut rx2 = tx.subscribe();
@@ -716,7 +716,7 @@ mod tests {
     #[test]
     fn drop_subscribe_ignores_queued() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel(2);
+        let (tx, rx) = channel(2);
 
         assert_eq!(
             PollSend::Ready,
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn drop_preserves_read() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel(2);
+        let (tx, mut rx) = channel(2);
 
         let _rx_pin_message_1 = rx.clone();
 
@@ -790,7 +790,7 @@ mod tokio_tests {
     async fn simple() {
         // crate::logging::enable_log();
         for cap in capacity_iter() {
-            let (mut tx, mut rx) = super::channel(cap);
+            let (tx, mut rx) = super::channel(cap);
 
             spawn(async move {
                 for message in Message::new_iter(0) {
@@ -819,7 +819,7 @@ mod tokio_tests {
             let (tx, mut rx) = super::channel(cap);
 
             for i in 0..CHANNEL_TEST_SENDERS {
-                let mut tx2 = tx.clone();
+                let tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
@@ -847,7 +847,7 @@ mod tokio_tests {
     async fn multi_receiver() {
         // crate::logging::enable_log();
         for cap in capacity_iter() {
-            let (mut tx, rx) = super::channel(cap);
+            let (tx, rx) = super::channel(cap);
 
             spawn(async move {
                 for message in Message::new_iter(0) {
@@ -890,7 +890,7 @@ mod tokio_tests {
             let (tx, rx) = super::channel(cap);
 
             for i in 0..CHANNEL_TEST_SENDERS {
-                let mut tx2 = tx.clone();
+                let tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
@@ -934,9 +934,9 @@ mod tokio_tests {
 
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
-            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+            let (barrier, mut sender_quit) = crate::barrier::channel();
 
-            let mut tx2 = tx.clone();
+            let tx2 = tx.clone();
             spawn(async move {
                 for message in Message::new_iter(0) {
                     tx2.send(message).await.expect("send failed");
@@ -1012,7 +1012,7 @@ mod async_std_tests {
     async fn simple() {
         crate::logging::enable_log();
         for cap in capacity_iter() {
-            let (mut tx, mut rx) = super::channel(cap);
+            let (tx, mut rx) = super::channel(cap);
 
             spawn(async move {
                 for message in Message::new_iter(0) {
@@ -1041,7 +1041,7 @@ mod async_std_tests {
             let (tx, mut rx) = super::channel(cap);
 
             for i in 0..CHANNEL_TEST_SENDERS {
-                let mut tx2 = tx.clone();
+                let tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
@@ -1068,7 +1068,7 @@ mod async_std_tests {
     async fn multi_receiver() {
         // crate::logging::enable_log();
         for cap in capacity_iter() {
-            let (mut tx, rx) = super::channel(cap);
+            let (tx, rx) = super::channel(cap);
 
             spawn(async move {
                 for message in Message::new_iter(0) {
@@ -1111,7 +1111,7 @@ mod async_std_tests {
             let (tx, rx) = super::channel(cap);
 
             for i in 0..CHANNEL_TEST_SENDERS {
-                let mut tx2 = tx.clone();
+                let tx2 = tx.clone();
                 spawn(async move {
                     for message in Message::new_multi_sender(i) {
                         tx2.send(message).await.expect("send failed");
@@ -1154,9 +1154,9 @@ mod async_std_tests {
 
         for cap in capacity_iter() {
             let (tx, mut rx) = super::channel(cap);
-            let (mut barrier, mut sender_quit) = crate::barrier::channel();
+            let (barrier, mut sender_quit) = crate::barrier::channel();
 
-            let mut tx2 = tx.clone();
+            let tx2 = tx.clone();
             spawn(async move {
                 for message in Message::new_iter(0) {
                     tx2.send(message).await.expect("send failed");

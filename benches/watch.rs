@@ -6,7 +6,7 @@ use postage::{sink::Sink, stream::Stream};
 struct Message;
 
 pub fn send_recv(c: &mut Criterion) {
-    let (mut tx, mut rx) = watch::channel::<Message>();
+    let (tx, mut rx) = watch::channel::<Message>();
     c.bench_function("watch::send_recv", |b| {
         b.iter(|| {
             tx.try_send(black_box(Message {})).unwrap();

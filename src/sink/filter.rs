@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn simple() {
         let mut test_sink = test_sink(vec![PollSend::Ready, PollSend::Ready]);
-        let mut filter = FilterSink::new(|i| i % 2 == 0, &mut test_sink);
+        let filter = FilterSink::new(|i| i % 2 == 0, &mut test_sink);
 
         let mut cx = Context::empty();
 
@@ -88,7 +88,7 @@ mod tests {
     #[test]
     fn forward_pending() {
         let source = pending::<usize>();
-        let mut find = FilterSink::new(|_| true, source);
+        let find = FilterSink::new(|_| true, source);
 
         let mut cx = Context::empty();
 
@@ -98,7 +98,7 @@ mod tests {
     #[test]
     fn forward_closed() {
         let source = rejected::<usize>();
-        let mut find = FilterSink::new(|_| true, source);
+        let find = FilterSink::new(|_| true, source);
 
         let mut cx = Context::empty();
 
@@ -108,7 +108,7 @@ mod tests {
     #[test]
     fn ignored_ready() {
         let source = rejected::<usize>();
-        let mut find = FilterSink::new(|_| false, source);
+        let find = FilterSink::new(|_| false, source);
 
         let mut cx = Context::empty();
 

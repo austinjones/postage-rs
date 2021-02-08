@@ -5,7 +5,7 @@ use postage::{sink::Sink, stream::Stream};
 struct Message;
 
 pub fn send_recv(c: &mut Criterion) {
-    let (mut tx, mut rx) = dispatch::channel::<Message>(8);
+    let (tx, mut rx) = dispatch::channel::<Message>(8);
     c.bench_function("dispatch::send_recv", |b| {
         b.iter(|| {
             tx.try_send(black_box(Message {})).unwrap();
@@ -15,7 +15,7 @@ pub fn send_recv(c: &mut Criterion) {
 }
 
 pub fn send_full(c: &mut Criterion) {
-    let (mut tx, _rx) = dispatch::channel::<Message>(4);
+    let (tx, _rx) = dispatch::channel::<Message>(4);
     for _ in 0..4 {
         tx.try_send(Message {}).unwrap();
     }

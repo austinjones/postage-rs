@@ -99,7 +99,7 @@ mod tests {
         let mut left = test_sink(vec![PollSend::Ready]);
         let mut right = test_sink(vec![PollSend::Ready]);
 
-        let mut chain = ChainSink::new(&mut left, &mut right);
+        let chain = ChainSink::new(&mut left, &mut right);
 
         let mut cx = Context::empty();
 
@@ -121,7 +121,7 @@ mod tests {
         let mut left = test_sink(vec![PollSend::Pending(1)]);
         let mut right = test_sink(vec![PollSend::Ready]);
 
-        let mut chain = ChainSink::new(&mut left, &mut right);
+        let chain = ChainSink::new(&mut left, &mut right);
 
         let mut cx = Context::empty();
 
@@ -145,7 +145,7 @@ mod tests {
     fn ignores_after_close() {
         let mut left = test_sink(vec![PollSend::Rejected(1), PollSend::Ready]);
         let mut right = test_sink(vec![PollSend::Rejected(1), PollSend::Ready]);
-        let mut chain = ChainSink::new(&mut left, &mut right);
+        let chain = ChainSink::new(&mut left, &mut right);
 
         let mut cx = Context::empty();
 

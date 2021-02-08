@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn send_accepted() {
         let mut cx = noop_context();
-        let (mut tx, _rx) = channel();
+        let (tx, _rx) = channel();
 
         assert_eq!(
             PollSend::Ready,
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn send_recv() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(
             PollSend::Ready,
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn send_then_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(
             PollSend::Ready,
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn receiver_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel();
+        let (tx, rx) = channel();
 
         drop(rx);
 
@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn wake_receiver() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         let (w1, w1_count) = new_count_waker();
         let w1_context = Context::from_waker(&w1);
@@ -252,7 +252,7 @@ mod tokio_tests {
     #[tokio::test]
     async fn simple() {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
-            let (mut tx, mut rx) = channel();
+            let (tx, mut rx) = channel();
 
             spawn(async move { tx.send(100usize).await });
 
@@ -280,7 +280,7 @@ mod async_std_tests {
     #[async_std::test]
     async fn simple() {
         for i in 0..CHANNEL_TEST_ITERATIONS {
-            let (mut tx, mut rx) = channel();
+            let (tx, mut rx) = channel();
 
             spawn(async move { tx.send(i).await });
 

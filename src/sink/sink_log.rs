@@ -85,7 +85,7 @@ mod tests {
     #[test]
     fn ready_forwarded() {
         crate::logging::enable_log();
-        let mut repeat = SinkLog::new(ready(), Level::Info);
+        let repeat = SinkLog::new(ready(), Level::Info);
         let mut cx = Context::empty();
 
         assert_eq!(
@@ -97,7 +97,7 @@ mod tests {
     #[test]
     fn ready_enum() {
         crate::logging::enable_log();
-        let mut repeat = SinkLog::new(ready(), Level::Info);
+        let repeat = SinkLog::new(ready(), Level::Info);
         let mut cx = Context::empty();
 
         assert_eq!(
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn pending_forwarded() {
         crate::logging::enable_log();
-        let mut repeat = SinkLog::new(pending(), Level::Info);
+        let repeat = SinkLog::new(pending(), Level::Info);
         let mut cx = Context::empty();
 
         assert_eq!(
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn closed_forwarded() {
         crate::logging::enable_log();
-        let mut repeat = SinkLog::new(rejected(), Level::Info);
+        let repeat = SinkLog::new(rejected(), Level::Info);
         let mut cx = Context::empty();
 
         assert_eq!(

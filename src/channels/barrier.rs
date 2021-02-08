@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn send_accepted() {
         let mut cx = noop_context();
-        let (mut tx, _rx) = channel();
+        let (tx, _rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
         assert_eq!(PollSend::Rejected(()), Pin::new(&tx).poll_send(&mut cx, ()));
@@ -184,7 +184,7 @@ mod tests {
     #[test]
     fn send_recv() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn send_then_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
@@ -218,7 +218,7 @@ mod tests {
     #[test]
     fn receiver_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel();
+        let (tx, rx) = channel();
 
         drop(rx);
 
@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn receiver_clone() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
         let mut rx2 = rx.clone();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn receiver_send_then_clone() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn wake_receiver() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         let (w, w_count) = new_count_waker();
         let w_context = Context::from_waker(&w);
@@ -317,7 +317,7 @@ mod tokio_tests {
     #[tokio::test]
     async fn simple() {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
-            let (mut tx, rx) = super::channel();
+            let (tx, rx) = super::channel();
 
             spawn(async move {
                 tx.send(()).await.expect("Should send message");
@@ -402,7 +402,7 @@ mod async_std_tests {
     #[async_std::test]
     async fn simple() {
         for _ in 0..CHANNEL_TEST_ITERATIONS {
-            let (mut tx, rx) = super::channel();
+            let (tx, rx) = super::channel();
 
             spawn(async move {
                 tx.send(()).await.expect("Should send message");

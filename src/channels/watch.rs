@@ -319,7 +319,7 @@ mod tests {
     #[test]
     fn send_accepted() {
         let mut cx = noop_context();
-        let (mut tx, _rx) = channel();
+        let (tx, _rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(1)));
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(2)));
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn send_recv() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(1)));
 
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn borrow_sent() {
         let mut cx = panic_context();
-        let (mut tx, rx) = channel();
+        let (tx, rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(1)));
 
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn sender_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
         let mut rx2 = rx.clone();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(1)));
@@ -426,7 +426,7 @@ mod tests {
     #[test]
     fn receiver_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel();
+        let (tx, rx) = channel();
 
         drop(rx);
 
@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn send_then_receiver_disconnect() {
         let mut cx = noop_context();
-        let (mut tx, rx) = channel();
+        let (tx, rx) = channel();
 
         assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, State(1)));
 
@@ -454,7 +454,7 @@ mod tests {
     #[test]
     fn wake_receiver() {
         let mut cx = panic_context();
-        let (mut tx, mut rx) = channel();
+        let (tx, mut rx) = channel();
 
         let (w1, w1_count) = new_count_waker();
         let w1_context = Context::from_waker(&w1);
@@ -515,7 +515,7 @@ mod tokio_tests {
 
     #[tokio::test]
     async fn simple() {
-        let (mut tx, mut rx) = super::channel();
+        let (tx, mut rx) = super::channel();
 
         tokio::task::spawn(async move {
             let mut iter = Message::new_iter(0);
@@ -561,7 +561,7 @@ mod tokio_tests {
 
     #[tokio::test]
     async fn multi_receiver() {
-        let (mut tx, rx) = super::channel();
+        let (tx, rx) = super::channel();
 
         tokio::task::spawn(async move {
             let mut iter = Message::new_iter(0);
@@ -605,7 +605,7 @@ mod async_std_tests {
 
     #[async_std::test]
     async fn simple() {
-        let (mut tx, mut rx) = super::channel();
+        let (tx, mut rx) = super::channel();
 
         spawn(async move {
             let mut iter = Message::new_iter(0);
@@ -651,7 +651,7 @@ mod async_std_tests {
 
     #[tokio::test]
     async fn multi_receiver() {
-        let (mut tx, rx) = super::channel();
+        let (tx, rx) = super::channel();
 
         tokio::task::spawn(async move {
             let mut iter = Message::new_iter(0);
