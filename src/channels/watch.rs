@@ -92,6 +92,53 @@ impl<T> Sender<T> {
     }
 }
 
+#[cfg(feature = "futures-traits")]
+mod impl_futures {
+    use std::task::Poll;
+
+    use crate::sink::SendError;
+
+    impl<T> futures::sink::Sink<T> for super::Sender<T> {
+        type Error = SendError<()>;
+
+        fn poll_ready(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            if self.shared.is_closed() {
+                return Poll::Ready(Err(SendError(())));
+            }
+
+            Poll::Ready(Ok(()))
+        }
+
+        fn start_send(self: std::pin::Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
+            if self.shared.is_closed() {
+                return Err(SendError(()));
+            }
+
+            self.shared.extension().push(item);
+            self.shared.notify_receivers();
+
+            Ok(())
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+}
+
 /// The receiver half of a watch channel.  Can recieve state updates with the postage::Sink trait.
 ///
 /// The reciever will be woken when new values arive, but is not guaranteed to recieve every message.

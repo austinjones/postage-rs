@@ -77,6 +77,65 @@ impl<T> Sink for Sender<T> {
     }
 }
 
+#[cfg(feature = "futures-traits")]
+mod impl_futures {
+    use crate::sink::SendError;
+    use std::task::Poll;
+
+    impl<T> futures::sink::Sink<T> for super::Sender<T> {
+        type Error = SendError<()>;
+
+        fn poll_ready(
+            self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            loop {
+                if self.shared.is_closed() {
+                    return Poll::Ready(Err(SendError(())));
+                }
+
+                let queue = &self.shared.extension().queue;
+                let guard = self.shared.recv_guard();
+
+                if queue.is_full() {
+                    let mut cx = cx.into();
+                    self.shared.subscribe_recv(&mut cx);
+
+                    if guard.is_expired() {
+                        continue;
+                    }
+
+                    return Poll::Pending;
+                } else {
+                    return Poll::Ready(Ok(()));
+                }
+            }
+        }
+
+        fn start_send(self: std::pin::Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
+            self.shared
+                .extension()
+                .queue
+                .push(item)
+                .map_err(|_t| SendError(()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_close(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+}
+
 impl<T> Sender<T> {
     pub fn subscribe(&self) -> Receiver<T> {
         Receiver {

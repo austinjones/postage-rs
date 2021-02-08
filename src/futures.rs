@@ -2,10 +2,9 @@ use std::task::Poll;
 
 macro_rules! poll {
     ($self:ident, $cx:ident) => {{
-        use crate::context::Context;
         use crate::prelude::Stream;
 
-        let mut cx = Context::from_waker($cx.waker());
+        let mut cx = $cx.into();
 
         return match $self.poll_recv(&mut cx) {
             crate::stream::PollRecv::Ready(v) => Poll::Ready(Some(v)),
@@ -82,7 +81,106 @@ impl<T: Clone> futures::stream::Stream for crate::watch::Receiver<T> {
 }
 
 #[cfg(test)]
-mod tests {
+mod sink_tests {
+    use std::{pin::Pin, task::Poll};
+
+    use crate::{barrier, dispatch, mpsc, oneshot, sink::SendError, watch};
+    use futures::Sink;
+
+    macro_rules! test_sink {
+        ($chan:expr, $val:expr) => {
+            let mut std_cx = futures_test::task::noop_context();
+
+            let (mut tx, rx) = $chan;
+
+            assert_eq!(
+                Poll::Ready(Ok(())),
+                Pin::new(&mut tx).poll_ready(&mut std_cx)
+            );
+            assert_eq!(Ok(()), Pin::new(&mut tx).start_send($val));
+
+            assert_eq!(Poll::Pending, Pin::new(&mut tx).poll_ready(&mut std_cx));
+
+            drop(rx);
+            assert_eq!(
+                Poll::Ready(Err(SendError(()))),
+                Pin::new(&mut tx).poll_ready(&mut std_cx)
+            );
+            assert_eq!(Err(SendError(())), Pin::new(&mut tx).start_send($val));
+        };
+    }
+
+    macro_rules! test_sink_ready {
+        ($chan:expr, $val:expr) => {
+            let mut std_cx = futures_test::task::noop_context();
+
+            let (mut tx, _rx) = $chan;
+
+            assert_eq!(
+                Poll::Ready(Ok(())),
+                Pin::new(&mut tx).poll_ready(&mut std_cx)
+            );
+            assert_eq!(Ok(()), Pin::new(&mut tx).start_send($val));
+
+            assert_eq!(
+                Poll::Ready(Ok(())),
+                Pin::new(&mut tx).poll_ready(&mut std_cx)
+            );
+            assert_eq!(Ok(()), Pin::new(&mut tx).start_send($val));
+        };
+    }
+
+    #[test]
+    fn barrier() {
+        test_sink_ready!(barrier::channel(), ());
+    }
+
+    // I couldn't implement the trait for the broadcast channel.
+    // Values and Contexts are intricately linked to the internal structure of the broadcast channel.
+    // Unfortunately, futures::Sink provides the Context and Item separately,
+    // so there was no reasonable way to implement the futures trait.
+
+    #[test]
+    fn dispatch() {
+        test_sink!(dispatch::channel(1), 1usize);
+    }
+
+    #[test]
+    fn mpsc() {
+        test_sink!(mpsc::channel(1), 1usize);
+    }
+
+    #[test]
+    fn oneshot() {
+        let mut std_cx = futures_test::task::noop_context();
+
+        let (mut tx, rx) = oneshot::channel();
+
+        assert_eq!(
+            Poll::Ready(Ok(())),
+            Pin::new(&mut tx).poll_ready(&mut std_cx)
+        );
+        assert_eq!(Ok(()), Pin::new(&mut tx).start_send(1usize));
+
+        assert_eq!(Poll::Pending, Pin::new(&mut tx).poll_ready(&mut std_cx));
+
+        drop(rx);
+
+        assert_eq!(
+            Poll::Ready(Ok(())),
+            Pin::new(&mut tx).poll_ready(&mut std_cx)
+        );
+        assert_eq!(Err(SendError(1usize)), Pin::new(&mut tx).start_send(1usize));
+    }
+
+    #[test]
+    fn watch() {
+        test_sink_ready!(watch::channel(), 1usize);
+    }
+}
+
+#[cfg(test)]
+mod stream_tests {
     use std::{pin::Pin, task::Poll};
 
     use crate::{
