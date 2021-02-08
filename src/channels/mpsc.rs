@@ -110,11 +110,18 @@ mod impl_futures {
         }
 
         fn start_send(self: std::pin::Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
-            self.shared
+            let result = self
+                .shared
                 .extension()
                 .queue
                 .push(item)
-                .map_err(|_t| SendError(()))
+                .map_err(|_t| SendError(()));
+
+            if result.is_ok() {
+                self.shared.notify_receivers();
+            }
+
+            result
         }
 
         fn poll_flush(
