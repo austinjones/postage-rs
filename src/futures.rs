@@ -132,7 +132,21 @@ mod sink_tests {
 
     #[test]
     fn barrier() {
-        test_sink_ready!(barrier::channel(), ());
+        let mut std_cx = futures_test::task::noop_context();
+
+        let (mut tx, _rx) = barrier::channel();
+
+        assert_eq!(
+            Poll::Ready(Ok(())),
+            Pin::new(&mut tx).poll_ready(&mut std_cx)
+        );
+        assert_eq!(Ok(()), Pin::new(&mut tx).start_send(()));
+
+        assert_eq!(
+            Poll::Ready(Err(SendError(()))),
+            Pin::new(&mut tx).poll_ready(&mut std_cx)
+        );
+        assert_eq!(Err(SendError(())), Pin::new(&mut tx).start_send(()));
     }
 
     // I couldn't implement the trait for the broadcast channel.
@@ -162,7 +176,11 @@ mod sink_tests {
         );
         assert_eq!(Ok(()), Pin::new(&mut tx).start_send(1usize));
 
-        assert_eq!(Poll::Pending, Pin::new(&mut tx).poll_ready(&mut std_cx));
+        assert_eq!(
+            Poll::Ready(Ok(())),
+            Pin::new(&mut tx).poll_ready(&mut std_cx)
+        );
+        assert_eq!(Err(SendError(1usize)), Pin::new(&mut tx).start_send(1usize));
 
         drop(rx);
 
