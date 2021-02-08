@@ -27,6 +27,9 @@ pub mod sink;
 pub mod stream;
 mod sync;
 
+#[cfg(feature = "futures-traits")]
+mod futures;
+
 pub use channels::barrier;
 pub use channels::broadcast;
 pub use channels::dispatch;
