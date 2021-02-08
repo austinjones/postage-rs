@@ -1,6 +1,6 @@
 [package]
 name = "postage"
-version = "0.4.0"
+version = "0.4.1"
 description = "An async channel library"
 keywords = ["async", "channels"]
 categories = ["asynchronous"]
@@ -65,14 +65,16 @@ harness = false
 
 [features]
 default = ["logging", "blocking"]
+# enables blocking send and receive
+blocking = ["pollster"]
+# enables debug log statements.  disabled by default in production builds as they are *very verbose*
+debug = ["log", "simple_logger"]
 # enables futures Sink and Stream implementations
 futures-traits = ["futures"]
 # enables combinators that log their messages
 logging = ["log"]
-# enables debug log statements.  disabled by default in production builds as they are *very verbose*
-debug = ["log", "simple_logger"]
-# enables blocking send and receive
-blocking = ["pollster"]
+
+
 
 # [[example]]
 # name = "tokio"

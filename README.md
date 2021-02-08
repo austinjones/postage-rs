@@ -15,7 +15,7 @@
   - With the `futures-traits` feature, channels implement the futures `Sink/Stream` traits.
 - **Throughly tested.**  
   - Channels have full unit test coverage, and integration test coverage with multiple async executors.
-- Includes **built-in [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) and [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) combinators.** 
+- Includes **built-in [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) and [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) combinators.** 
   - Sinks can be chained and filtered.
   - Streams can be chained, filtered, mapped, and merged.
   - Sinks and streams can log their values, for easy app debugging.
