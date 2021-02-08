@@ -59,7 +59,7 @@ where
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
@@ -197,7 +197,10 @@ mod tests {
         let mut chan = channel(2);
         let (tx, _rx) = pin(&mut chan);
 
-        assert_eq!(PollSend::Ready, tx.poll_send(&mut cx, Message(1)));
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
+        );
     }
 
     #[test]
@@ -208,17 +211,17 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(3))
+            Pin::new(&tx).poll_send(&mut noop_context(), Message(3))
         );
     }
 
@@ -229,7 +232,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
@@ -244,7 +247,10 @@ mod tests {
         let mut chan = channel(2);
         let (tx, rx) = pin(&mut chan);
 
-        assert_eq!(PollSend::Ready, tx.poll_send(&mut cx, Message(1)));
+        assert_eq!(
+            PollSend::Ready,
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
+        );
         assert_eq!(PollRecv::Ready(Message(1)), rx.poll_recv(&mut cx));
     }
 
@@ -256,7 +262,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollRecv::Ready(Message(1)),
@@ -267,7 +273,7 @@ mod tests {
         assert_eq!(PollRecv::Pending, Pin::new(&mut rx2).poll_recv(&mut cx));
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollRecv::Ready(Message(2)),
@@ -284,14 +290,14 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         let mut rx2 = tx.subscribe();
         assert_eq!(PollRecv::Pending, Pin::new(&mut rx2).poll_recv(&mut cx));
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollRecv::Ready(Message(2)),
@@ -309,20 +315,20 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx2).poll_send(&mut cx, Message(2))
+            Pin::new(&tx2).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(3))
+            Pin::new(&tx).poll_send(&mut noop_context(), Message(3))
         );
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx2).poll_send(&mut noop_context(), Message(3))
+            Pin::new(&tx2).poll_send(&mut noop_context(), Message(3))
         );
 
         assert_eq!(
@@ -350,15 +356,15 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(3))
+            Pin::new(&tx).poll_send(&mut noop_context(), Message(3))
         );
 
         assert_eq!(
@@ -396,11 +402,11 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx2).poll_send(&mut cx, Message(2))
+            Pin::new(&tx2).poll_send(&mut cx, Message(2))
         );
         drop(tx);
         drop(tx2);
@@ -423,13 +429,13 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         drop(rx);
         drop(rx2);
         assert_eq!(
             PollSend::Rejected(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
     }
 
@@ -440,7 +446,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         drop(rx);
 
@@ -448,7 +454,7 @@ mod tests {
         let mut w2_context = Context::from_waker(&w2);
         assert_eq!(
             PollSend::Rejected(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut w2_context, Message(2))
+            Pin::new(&tx).poll_send(&mut w2_context, Message(2))
         );
 
         let _rx = tx.subscribe();
@@ -464,18 +470,18 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         let (w2, w2_count) = new_count_waker();
         let w2_context = Context::from_waker(&w2);
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut w2_context.into(), Message(3))
+            Pin::new(&tx).poll_send(&mut w2_context.into(), Message(3))
         );
 
         assert_eq!(0, w2_count.get());
@@ -516,14 +522,14 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(1, w1_count.get());
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(1, w1_count.get());
@@ -537,18 +543,18 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         drop(rx2);
         assert_eq!(
             PollSend::Pending(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut noop_context(), Message(2))
+            Pin::new(&tx).poll_send(&mut noop_context(), Message(2))
         );
 
         assert_eq!(
@@ -558,7 +564,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(4))
+            Pin::new(&tx).poll_send(&mut cx, Message(4))
         );
     }
 
@@ -571,12 +577,12 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(
@@ -588,7 +594,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(3))
+            Pin::new(&tx).poll_send(&mut cx, Message(3))
         );
     }
 
@@ -602,17 +608,17 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut w1_context, Message(1))
+            Pin::new(&tx).poll_send(&mut w1_context, Message(1))
         );
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut w1_context, Message(2))
+            Pin::new(&tx).poll_send(&mut w1_context, Message(2))
         );
 
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut w1_context, Message(3))
+            Pin::new(&tx).poll_send(&mut w1_context, Message(3))
         );
 
         assert_eq!(0, w1_count.get());
@@ -648,7 +654,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollRecv::Ready(Message(1)),
@@ -657,7 +663,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollRecv::Ready(Message(2)),
@@ -677,7 +683,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollRecv::Ready(Message(1)),
@@ -695,11 +701,11 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollRecv::Ready(Message(1)),
@@ -714,7 +720,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         drop(rx);
@@ -722,7 +728,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
         assert_eq!(
             PollRecv::Ready(Message(2)),
@@ -739,12 +745,12 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(
@@ -757,7 +763,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Pending(Message(3)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(3))
+            Pin::new(&tx).poll_send(&mut cx, Message(3))
         );
     }
 }

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use pin_project::pin_project;
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Mutex};
 
 use crate::sink::{PollSend, Sink};
 
@@ -42,7 +42,7 @@ impl<T> Sink for ReadySink<T> {
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         _value: Self::Item,
     ) -> crate::sink::PollSend<Self::Item> {
@@ -64,7 +64,7 @@ impl<T> Sink for PendingSink<T> {
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
@@ -85,7 +85,7 @@ impl<T> Sink for RejectedSink<T> {
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
@@ -94,8 +94,8 @@ impl<T> Sink for RejectedSink<T> {
 }
 #[pin_project]
 pub struct TestSink<I: Iterator, T> {
-    iter: I,
-    values: Vec<T>,
+    iter: Mutex<I>,
+    values: Mutex<Vec<T>>,
 }
 
 impl<I, T> TestSink<I, T>
@@ -105,13 +105,13 @@ where
 {
     pub fn new(iter: I) -> Self {
         Self {
-            iter,
-            values: Vec::new(),
+            iter: Mutex::new(iter),
+            values: Mutex::new(Vec::new()),
         }
     }
 
-    pub fn values(&self) -> &[T] {
-        self.values.as_slice()
+    pub fn values(&self) -> Vec<T> {
+        self.values.lock().unwrap().clone()
     }
 }
 
@@ -123,16 +123,16 @@ where
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        let this = self.project();
+        let this = self.project_ref();
         let saved_value = value.clone();
-        match this.iter.next() {
+        match this.iter.lock().unwrap().next() {
             Some(poll) => {
                 if let PollSend::Ready = poll {
-                    this.values.push(saved_value);
+                    this.values.lock().unwrap().push(saved_value);
                 }
                 poll
             }

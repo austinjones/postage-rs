@@ -38,7 +38,7 @@ impl<T> Sink for Sender<T> {
     type Item = T;
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
@@ -138,11 +138,11 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
         assert_eq!(
             PollSend::Rejected(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
     }
 
@@ -153,7 +153,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(
@@ -180,7 +180,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         drop(tx);
@@ -202,7 +202,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Rejected(Message(1)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
     }
 
@@ -223,14 +223,14 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, Message(1))
+            Pin::new(&tx).poll_send(&mut cx, Message(1))
         );
 
         assert_eq!(1, w1_count.get());
 
         assert_eq!(
             PollSend::Rejected(Message(2)),
-            Pin::new(&mut tx).poll_send(&mut cx, Message(2))
+            Pin::new(&tx).poll_send(&mut cx, Message(2))
         );
 
         assert_eq!(1, w1_count.get());

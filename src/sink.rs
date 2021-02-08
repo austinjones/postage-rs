@@ -50,8 +50,8 @@
 //!     tx.send(true).await.ok();
 //! }
 //! ```
-use std::marker::PhantomPinned;
-use std::{future::Future, ops::DerefMut, pin::Pin, task::Poll};
+use std::{future::Future, pin::Pin, task::Poll};
+use std::{marker::PhantomPinned, ops::Deref};
 
 use crate::Context;
 use pin_project::pin_project;
@@ -132,18 +132,15 @@ pub trait Sink {
     /// - `PollSend::Ready` if the value was sent
     /// - `PollSend::Pending(value)` if the channel is full.  The channel will call the waker in `cx` when the item may be accepted in the future.
     /// - `PollSend::Rejected(value)` if the channel is closed, and will never accept the item.
-    fn poll_send(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        value: Self::Item,
-    ) -> PollSend<Self::Item>;
+    fn poll_send(self: Pin<&Self>, cx: &mut Context<'_>, value: Self::Item)
+        -> PollSend<Self::Item>;
 
     /// Attempts to send a message into the sink.  
     ///
     /// Returns:
     /// - `Ok(())` if the value was accepted.
     /// - `Err(SendError(value))` if the sink rejected the message.
-    fn send(&mut self, value: Self::Item) -> SendFuture<Self> {
+    fn send(&self, value: Self::Item) -> SendFuture<Self> {
         SendFuture::new(self, value)
     }
 
@@ -153,7 +150,7 @@ pub trait Sink {
     /// - `Ok(())` if the value was accepted.
     /// - `Err(TrySendError::Pending(value))` if the channel is full, and cannot accept the item at this time.
     /// - `Err(TrySendError::Rejected(value))` if the channel is closed, and will never accept the item.
-    fn try_send(&mut self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
+    fn try_send(&self, value: Self::Item) -> Result<(), TrySendError<Self::Item>>
     where
         Self: Unpin,
     {
@@ -170,7 +167,7 @@ pub trait Sink {
     ///
     /// Requires the `blocking` feature (enabled by default).
     #[cfg(feature = "blocking")]
-    fn blocking_send(&mut self, value: Self::Item) -> Result<(), SendError<Self::Item>>
+    fn blocking_send(&self, value: Self::Item) -> Result<(), SendError<Self::Item>>
     where
         Self: Unpin,
     {
@@ -190,7 +187,7 @@ pub trait Sink {
     /// Filters messages, forwarding them to the sink if the filter returns true
     fn filter<Filter>(self, filter: Filter) -> filter::FilterSink<Filter, Self>
     where
-        Filter: FnMut(&Self::Item) -> bool,
+        Filter: Fn(&Self::Item) -> bool,
         Self: Sized,
     {
         filter::FilterSink::new(filter, self)
@@ -216,27 +213,27 @@ where
     type Item = S::Item;
 
     fn poll_send(
-        mut self: Pin<&mut Self>,
+        self: Pin<&Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        S::poll_send(Pin::new(&mut **self), cx, value)
+        S::poll_send(Pin::new(&**self), cx, value)
     }
 }
 
 impl<P, S> Sink for Pin<P>
 where
-    P: DerefMut<Target = S> + Unpin,
+    P: Deref<Target = S> + Unpin,
     S: Sink + Unpin + ?Sized,
 {
     type Item = <S as Sink>::Item;
 
     fn poll_send(
-        self: Pin<&mut Self>,
+        self: Pin<&Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        Pin::get_mut(self).as_mut().poll_send(cx, value)
+        Pin::get_ref(self).as_ref().poll_send(cx, value)
     }
 }
 
@@ -260,7 +257,7 @@ where
     S: Sink + ?Sized,
 {
     #[pin]
-    send: &'s mut S,
+    send: &'s S,
     value: Option<S::Item>,
     #[pin]
     _pin: PhantomPinned,
@@ -270,7 +267,7 @@ impl<'s, S> SendFuture<'s, S>
 where
     S: Sink + ?Sized,
 {
-    pub fn new(send: &'s mut S, value: S::Item) -> SendFuture<S> {
+    pub fn new(send: &'s S, value: S::Item) -> SendFuture<S> {
         Self {
             send,
             value: Some(value),
@@ -293,7 +290,7 @@ where
         let this = self.project();
 
         let mut cx: crate::Context<'_> = cx.into();
-        match this.send.poll_send(&mut cx, this.value.take().unwrap()) {
+        match Pin::new(*this.send).poll_send(&mut cx, this.value.take().unwrap()) {
             PollSend::Ready => Poll::Ready(Ok(())),
             PollSend::Pending(value) => {
                 *this.value = Some(value);

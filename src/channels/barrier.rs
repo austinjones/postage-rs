@@ -45,7 +45,7 @@ impl Sink for Sender {
     type Item = ();
 
     fn poll_send(
-        self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&Self>,
         _cx: &mut crate::Context<'_>,
         _value: (),
     ) -> PollSend<Self::Item> {
@@ -177,11 +177,8 @@ mod tests {
         let mut cx = noop_context();
         let (mut tx, _rx) = channel();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
-        assert_eq!(
-            PollSend::Rejected(()),
-            Pin::new(&mut tx).poll_send(&mut cx, ())
-        );
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Rejected(()), Pin::new(&tx).poll_send(&mut cx, ()));
     }
 
     #[test]
@@ -189,7 +186,7 @@ mod tests {
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx).poll_recv(&mut cx));
         assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx).poll_recv(&mut cx));
@@ -210,7 +207,7 @@ mod tests {
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         drop(tx);
 
@@ -225,7 +222,7 @@ mod tests {
 
         drop(rx);
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
     }
 
     #[test]
@@ -234,7 +231,7 @@ mod tests {
         let (mut tx, mut rx) = channel();
         let mut rx2 = rx.clone();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx).poll_recv(&mut cx));
         assert_eq!(PollRecv::Ready(()), Pin::new(&mut rx2).poll_recv(&mut cx));
@@ -245,7 +242,7 @@ mod tests {
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         let mut rx2 = rx.clone();
 
@@ -268,14 +265,11 @@ mod tests {
 
         assert_eq!(0, w_count.get());
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         assert_eq!(1, w_count.get());
 
-        assert_eq!(
-            PollSend::Rejected(()),
-            Pin::new(&mut tx).poll_send(&mut cx, ())
-        );
+        assert_eq!(PollSend::Rejected(()), Pin::new(&tx).poll_send(&mut cx, ()));
 
         assert_eq!(1, w_count.get());
     }

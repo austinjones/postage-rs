@@ -213,10 +213,10 @@ mod stream_tests {
             let mut std_cx = futures_test::task::noop_context();
             let mut cx = crate::test::noop_context();
 
-            let (mut tx, mut rx) = $chan;
+            let (tx, mut rx) = $chan;
             assert_eq!(Poll::Pending, Pin::new(&mut rx).poll_next(&mut std_cx));
 
-            assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, $val));
+            assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, $val));
 
             assert_eq!(
                 Poll::Ready(Some($val)),
@@ -237,7 +237,7 @@ mod stream_tests {
         let (mut tx, mut rx) = barrier::channel();
         assert_eq!(Poll::Pending, Pin::new(&mut rx).poll_next(&mut std_cx));
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut tx).poll_send(&mut cx, ()));
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, ()));
 
         assert_eq!(
             Poll::Ready(Some(())),
@@ -283,10 +283,7 @@ mod stream_tests {
             Pin::new(&mut rx).poll_next(&mut std_cx)
         );
 
-        assert_eq!(
-            PollSend::Ready,
-            Pin::new(&mut tx).poll_send(&mut cx, 1usize)
-        );
+        assert_eq!(PollSend::Ready, Pin::new(&tx).poll_send(&mut cx, 1usize));
 
         assert_eq!(
             Poll::Ready(Some(1usize)),

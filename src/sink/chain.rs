@@ -42,11 +42,11 @@ where
     type Item = Left::Item;
 
     fn poll_send(
-        self: Pin<&mut Self>,
+        self: Pin<&Self>,
         cx: &mut Context<'_>,
         mut value: Self::Item,
     ) -> PollSend<Self::Item> {
-        let this = self.project();
+        let this = self.project_ref();
         let mut state = this.state.load(Ordering::Acquire);
 
         if let State::WritingLeft = state {
@@ -98,48 +98,47 @@ mod tests {
     fn simple() {
         let mut left = test_sink(vec![PollSend::Ready]);
         let mut right = test_sink(vec![PollSend::Ready]);
+
         let mut chain = ChainSink::new(&mut left, &mut right);
 
         let mut cx = Context::empty();
 
-        assert_eq!(
-            PollSend::Ready,
-            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
-        );
-        assert_eq!(PollSend::Ready, Pin::new(&mut chain).poll_send(&mut cx, 2));
+        assert_eq!(PollSend::Ready, Pin::new(&chain).poll_send(&mut cx, 1usize));
+        assert_eq!(PollSend::Ready, Pin::new(&chain).poll_send(&mut cx, 2));
         assert_eq!(
             PollSend::Rejected(3),
-            Pin::new(&mut chain).poll_send(&mut cx, 3)
+            Pin::new(&chain).poll_send(&mut cx, 3)
         );
 
         drop(chain);
 
-        assert_eq!(&[1], left.values());
-        assert_eq!(&[2], right.values());
+        assert_eq!(vec![1], left.values());
+        assert_eq!(vec![2], right.values());
     }
 
     #[test]
     fn waits_for_right() {
         let mut left = test_sink(vec![PollSend::Pending(1)]);
         let mut right = test_sink(vec![PollSend::Ready]);
+
         let mut chain = ChainSink::new(&mut left, &mut right);
 
         let mut cx = Context::empty();
 
         assert_eq!(
             PollSend::Pending(1),
-            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
+            Pin::new(&chain).poll_send(&mut cx, 1usize)
         );
-        assert_eq!(PollSend::Ready, Pin::new(&mut chain).poll_send(&mut cx, 2));
+        assert_eq!(PollSend::Ready, Pin::new(&chain).poll_send(&mut cx, 2));
         assert_eq!(
             PollSend::Rejected(3),
-            Pin::new(&mut chain).poll_send(&mut cx, 3)
+            Pin::new(&chain).poll_send(&mut cx, 3)
         );
 
         drop(chain);
 
         assert_eq!(Vec::<usize>::new(), left.values());
-        assert_eq!(&[2], right.values());
+        assert_eq!(vec![2], right.values());
     }
 
     #[test]
@@ -152,19 +151,19 @@ mod tests {
 
         assert_eq!(
             PollSend::Rejected(1),
-            Pin::new(&mut chain).poll_send(&mut cx, 1usize)
+            Pin::new(&chain).poll_send(&mut cx, 1usize)
         );
         assert_eq!(
             PollSend::Rejected(2),
-            Pin::new(&mut chain).poll_send(&mut cx, 2)
+            Pin::new(&chain).poll_send(&mut cx, 2)
         );
         assert_eq!(
             PollSend::Rejected(3),
-            Pin::new(&mut chain).poll_send(&mut cx, 3)
+            Pin::new(&chain).poll_send(&mut cx, 3)
         );
         assert_eq!(
             PollSend::Rejected(4),
-            Pin::new(&mut chain).poll_send(&mut cx, 4)
+            Pin::new(&chain).poll_send(&mut cx, 4)
         );
 
         drop(chain);

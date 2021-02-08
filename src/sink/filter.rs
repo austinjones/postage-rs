@@ -15,7 +15,7 @@ pub struct FilterSink<Filter, Into> {
 impl<Filter, Into> FilterSink<Filter, Into>
 where
     Into: Sink,
-    Filter: FnMut(&Into::Item) -> bool,
+    Filter: Fn(&Into::Item) -> bool,
 {
     pub fn new(filter: Filter, into: Into) -> Self {
         Self { filter, into }
@@ -25,16 +25,17 @@ where
 impl<Filter, Into> Sink for FilterSink<Filter, Into>
 where
     Into: Sink,
-    Filter: FnMut(&Into::Item) -> bool,
+    Filter: Fn(&Into::Item) -> bool,
 {
     type Item = Into::Item;
 
     fn poll_send(
-        self: Pin<&mut Self>,
+        self: Pin<&Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        let this = self.project();
+        let this = self.project_ref();
+
         if !(this.filter)(&value) {
             return PollSend::Ready;
         }
@@ -64,24 +65,24 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut filter).poll_send(&mut cx, 1usize)
+            Pin::new(&filter).poll_send(&mut cx, 1usize)
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut filter).poll_send(&mut cx, 2usize)
+            Pin::new(&filter).poll_send(&mut cx, 2usize)
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut filter).poll_send(&mut cx, 3usize)
+            Pin::new(&filter).poll_send(&mut cx, 3usize)
         );
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut filter).poll_send(&mut cx, 4usize)
+            Pin::new(&filter).poll_send(&mut cx, 4usize)
         );
 
         drop(filter);
 
-        assert_eq!(&[2, 4], test_sink.values());
+        assert_eq!(vec![2, 4], test_sink.values());
     }
 
     #[test]
@@ -91,10 +92,7 @@ mod tests {
 
         let mut cx = Context::empty();
 
-        assert_eq!(
-            PollSend::Pending(1),
-            Pin::new(&mut find).poll_send(&mut cx, 1)
-        );
+        assert_eq!(PollSend::Pending(1), Pin::new(&find).poll_send(&mut cx, 1));
     }
 
     #[test]
@@ -104,10 +102,7 @@ mod tests {
 
         let mut cx = Context::empty();
 
-        assert_eq!(
-            PollSend::Rejected(1),
-            Pin::new(&mut find).poll_send(&mut cx, 1)
-        );
+        assert_eq!(PollSend::Rejected(1), Pin::new(&find).poll_send(&mut cx, 1));
     }
 
     #[test]
@@ -117,6 +112,6 @@ mod tests {
 
         let mut cx = Context::empty();
 
-        assert_eq!(PollSend::Ready, Pin::new(&mut find).poll_send(&mut cx, 1));
+        assert_eq!(PollSend::Ready, Pin::new(&find).poll_send(&mut cx, 1));
     }
 }

@@ -34,11 +34,11 @@ where
     type Item = S::Item;
 
     fn poll_send(
-        self: Pin<&mut Self>,
+        self: Pin<&Self>,
         cx: &mut Context<'_>,
         value: Self::Item,
     ) -> PollSend<Self::Item> {
-        let this = self.project();
+        let this = self.project_ref();
         let level = *this.level;
 
         let debug_repr = if log_enabled!(level) {
@@ -90,7 +90,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut repeat).poll_send(&mut cx, Message(1usize))
+            Pin::new(&repeat).poll_send(&mut cx, Message(1usize))
         );
     }
 
@@ -102,7 +102,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Ready,
-            Pin::new(&mut repeat).poll_send(&mut cx, MessageEnum::Variant(1usize))
+            Pin::new(&repeat).poll_send(&mut cx, MessageEnum::Variant(1usize))
         );
     }
 
@@ -114,7 +114,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Pending(Message(1usize)),
-            Pin::new(&mut repeat).poll_send(&mut cx, Message(1usize))
+            Pin::new(&repeat).poll_send(&mut cx, Message(1usize))
         );
     }
 
@@ -126,7 +126,7 @@ mod tests {
 
         assert_eq!(
             PollSend::Rejected(Message(1usize)),
-            Pin::new(&mut repeat).poll_send(&mut cx, Message(1usize))
+            Pin::new(&repeat).poll_send(&mut cx, Message(1usize))
         );
     }
 }
