@@ -13,7 +13,7 @@
 - Works with **any executor.**
   - Currently regressions are written for `tokio` and `async-std`.
   - With the `futures-traits` feature, channels implement the futures `Sink/Stream` traits.
-- **Throughly tested.**  
+- **Thoroughly tested.**  
   - Channels have full unit test coverage, and integration test coverage with multiple async executors.
 - Includes **built-in [Sink](https://docs.rs/postage/latest/postage/sink/trait.Sink.html) and [Stream](https://docs.rs/postage/latest/postage/stream/trait.Stream.html) combinators.** 
   - Sinks can be chained and filtered.
