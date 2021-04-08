@@ -1,6 +1,7 @@
 //! Oneshot channels transmit a single value between a sender and a reciever.  
 //!
 //! Neither can be cloned.  If the sender drops, the receiver recieves a `None` value.
+use std::fmt;
 use std::sync::Arc;
 
 use super::SendMessage;
@@ -31,7 +32,7 @@ pub struct Sender<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
 
-assert_impl_all!(Sender<SendMessage>: Send, Sync);
+assert_impl_all!(Sender<SendMessage>: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Sender<SendMessage>: Clone);
 
 impl<T> Sink for Sender<T> {
@@ -46,6 +47,12 @@ impl<T> Sink for Sender<T> {
             Ok(_) => PollSend::Ready,
             Err(v) => PollSend::Rejected(v),
         }
+    }
+}
+
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sender").finish()
     }
 }
 
@@ -95,7 +102,7 @@ pub struct Receiver<T> {
     pub(in crate::channels::oneshot) shared: Arc<Transfer<T>>,
 }
 
-assert_impl_all!(Sender<SendMessage>: Send, Sync);
+assert_impl_all!(Sender<SendMessage>: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Sender<SendMessage>: Clone);
 
 impl<T> Stream for Receiver<T> {
@@ -112,6 +119,12 @@ impl<T> Stream for Receiver<T> {
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         self.shared.receiver_disconnect();
+    }
+}
+
+impl<T> fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }
 

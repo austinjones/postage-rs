@@ -2,6 +2,8 @@
 //!
 //! The producer can be cloned, and the sender task is suspended if the channel becomes full.
 
+use std::fmt;
+
 use super::SendMessage;
 use crate::{
     sink::{PollSend, Sink},
@@ -29,7 +31,7 @@ pub struct Sender<T> {
     pub(in crate::channels::mpsc) shared: SenderShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Sender<String>: Clone, Send, Sync);
+assert_impl_all!(Sender<String>: Clone, Send, Sync, fmt::Debug);
 
 impl<T> Clone for Sender<T> {
     fn clone(&self) -> Self {
@@ -71,6 +73,12 @@ impl<T> Sink for Sender<T> {
                 }
             }
         }
+    }
+}
+
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sender").finish()
     }
 }
 
@@ -147,7 +155,7 @@ pub struct Receiver<T> {
     pub(in crate::channels::mpsc) shared: ReceiverShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Receiver<SendMessage>: Send, Sync);
+assert_impl_all!(Receiver<SendMessage>: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Receiver<SendMessage>: Clone);
 
 impl<T> Stream for Receiver<T> {
@@ -179,6 +187,12 @@ impl<T> Stream for Receiver<T> {
                 }
             }
         }
+    }
+}
+
+impl<T> fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }
 
