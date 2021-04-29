@@ -2,6 +2,7 @@
 //!
 //! The barrier can also be triggered with `tx.send(())`.
 
+use std::fmt;
 use std::sync::Arc;
 
 use atomic::{Atomic, Ordering};
@@ -38,7 +39,7 @@ pub struct Sender {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
 
-assert_impl_all!(Sender: Send, Sync);
+assert_impl_all!(Sender: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Sender: Clone);
 
 impl Sink for Sender {
@@ -56,6 +57,12 @@ impl Sink for Sender {
             }
             State::Sent => PollSend::Rejected(()),
         }
+    }
+}
+
+impl fmt::Debug for Sender {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sender").finish()
     }
 }
 
@@ -117,7 +124,7 @@ pub struct Receiver {
     pub(in crate::channels::barrier) shared: Arc<Shared>,
 }
 
-assert_impl_all!(Receiver: Clone, Send, Sync);
+assert_impl_all!(Receiver: Clone, Send, Sync, fmt::Debug);
 
 #[derive(Copy, Clone)]
 enum State {
@@ -156,6 +163,12 @@ impl Stream for Receiver {
             }
             State::Sent => PollRecv::Ready(()),
         }
+    }
+}
+
+impl fmt::Debug for Receiver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }
 

@@ -3,6 +3,8 @@
 //! When a receiver is cloned, the new receive will observe the same series of messages as the original.
 //! When a receiver is created with `Sender::subscribe`, it will observe new messages.
 
+use std::fmt;
+
 use super::SendMessage;
 use static_assertions::assert_impl_all;
 
@@ -50,7 +52,7 @@ impl<T> Clone for Sender<T> {
     }
 }
 
-assert_impl_all!(Sender<SendMessage>: Send, Sync, Clone);
+assert_impl_all!(Sender<SendMessage>: Send, Sync, Clone, fmt::Debug);
 
 impl<T> Sink for Sender<T>
 where
@@ -98,6 +100,12 @@ impl<T> Sender<T> {
     }
 }
 
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sender").finish()
+    }
+}
+
 /// A broadcast receiver that can be used with the postage::Stream trait.
 ///
 /// When cloned, the new receiver will begin processing messages at the same location as the original.
@@ -109,7 +117,7 @@ pub struct Receiver<T> {
 unsafe impl<T: Send> Send for Receiver<T> {}
 unsafe impl<T: Send> Sync for Receiver<T> {}
 
-assert_impl_all!(Receiver<SendMessage>: Send, Sync, Clone);
+assert_impl_all!(Receiver<SendMessage>: Send, Sync, Clone, fmt::Debug);
 
 impl<T> Receiver<T> {
     fn new(shared: ReceiverShared<MpmcCircularBuffer<T>>, reader: BufferReader) -> Self {
@@ -160,6 +168,12 @@ impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         let buffer = self.shared.extension();
         self.reader.drop_with(buffer);
+    }
+}
+
+impl<T> fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }
 

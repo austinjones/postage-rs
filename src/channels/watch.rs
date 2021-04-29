@@ -6,6 +6,7 @@
 
 use super::SendSyncMessage;
 use std::{
+    fmt,
     ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -47,7 +48,7 @@ pub struct Sender<T> {
     pub(in crate::channels::watch) shared: SenderShared<StateExtension<T>>,
 }
 
-assert_impl_all!(Sender<SendSyncMessage>: Send, Sync);
+assert_impl_all!(Sender<SendSyncMessage>: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Sender<SendSyncMessage>: Clone);
 
 impl<T> Sink for Sender<T> {
@@ -89,6 +90,12 @@ impl<T> Sender<T> {
         let lock = extension.value.read().unwrap();
 
         Ref { lock }
+    }
+}
+
+impl<T> fmt::Debug for Sender<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Sender").finish()
     }
 }
 
@@ -147,7 +154,7 @@ pub struct Receiver<T> {
     pub(in crate::channels::watch) generation: AtomicUsize,
 }
 
-assert_impl_all!(Receiver<SendSyncMessage>: Clone, Send, Sync);
+assert_impl_all!(Receiver<SendSyncMessage>: Clone, Send, Sync, fmt::Debug);
 
 impl<T> Stream for Receiver<T>
 where
@@ -213,6 +220,12 @@ impl<T> Clone for Receiver<T> {
             shared: self.shared.clone(),
             generation: AtomicUsize::new(0),
         }
+    }
+}
+
+impl<T> fmt::Debug for Receiver<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Receiver").finish()
     }
 }
 
