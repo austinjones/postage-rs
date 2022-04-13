@@ -70,6 +70,7 @@ impl<T> Transfer<T> {
 
     pub fn sender_disconnect(&self) {
         self.sender.store(State::Dead, Ordering::Release);
+        self.notify_rx.notify();
     }
 
     pub fn receiver_disconnect(&self) {
