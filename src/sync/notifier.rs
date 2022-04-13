@@ -16,7 +16,7 @@ impl Notifier {
         }
     }
 
-    pub fn guard<'a>(&'a self) -> NotificationGuard<'a> {
+    pub fn guard(&self) -> NotificationGuard {
         let generation = self.generation.load(Ordering::Relaxed);
 
         NotificationGuard {

@@ -23,9 +23,7 @@ pub(crate) fn shared<E>(extension: E) -> (SenderShared<E>, ReceiverShared<E>) {
         inner: inner.clone(),
     };
 
-    let receiver = ReceiverShared {
-        inner: inner.clone(),
-    };
+    let receiver = ReceiverShared { inner };
 
     (sender, receiver)
 }
@@ -72,7 +70,7 @@ impl<E> SenderShared<E> {
         self.inner.sender_notify.subscribe(cx);
     }
 
-    pub fn recv_guard<'a>(&'a self) -> NotificationGuard<'a> {
+    pub fn recv_guard(&self) -> NotificationGuard {
         self.inner.sender_notify.guard()
     }
 
@@ -139,7 +137,7 @@ impl<E> ReceiverShared<E> {
         self.inner.receiver_notify.subscribe(cx);
     }
 
-    pub fn send_guard<'a>(&'a self) -> NotificationGuard<'a> {
+    pub fn send_guard(&self) -> NotificationGuard {
         self.inner.receiver_notify.guard()
     }
 
