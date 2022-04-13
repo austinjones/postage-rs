@@ -23,6 +23,7 @@ pollster = { version = "0.2", optional = true }
 simple_logger = { version = "2.1", optional = true }
 static_assertions = "1.1.0"
 thiserror = "1.0"
+parking_lot = "0.12"
 
 [dev-dependencies]
 futures-test = "0.3"

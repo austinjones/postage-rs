@@ -1,10 +1,8 @@
-use std::{
-    cmp::max,
-    sync::{atomic::AtomicUsize, Mutex, RwLock},
-};
+use std::{cmp::max, sync::atomic::AtomicUsize};
 
 use crate::Context;
 use atomic::Ordering;
+use parking_lot::{Mutex, RwLock};
 
 use super::notifier::Notifier;
 use std::fmt::Debug;
@@ -135,7 +133,7 @@ impl<T> MpmcCircularBuffer<T> {
     }
 
     pub fn new_reader(&self) -> BufferReader {
-        let _maint = self.maintenance.lock().unwrap();
+        let _maint = self.maintenance.lock();
         let index = self.head.load(Ordering::Acquire);
         self.readers.fetch_add(1, Ordering::AcqRel);
 
@@ -206,7 +204,7 @@ impl BufferReader {
 
     // To avoid the need for shared Arc references, clone and drop are written as methods instead of using std traits
     pub fn clone_with<T>(&self, buffer: &MpmcCircularBuffer<T>) -> Self {
-        let _maint = buffer.maintenance.lock().unwrap();
+        let _maint = buffer.maintenance.lock();
         buffer.readers.fetch_add(1, Ordering::AcqRel);
 
         let index = self.index;
@@ -219,7 +217,7 @@ impl BufferReader {
     }
 
     pub fn drop_with<T>(&mut self, buffer: &MpmcCircularBuffer<T>) {
-        let _maint = buffer.maintenance.lock().unwrap();
+        let _maint = buffer.maintenance.lock();
 
         // first, cancel all reads that this reader has committed
         buffer
@@ -315,7 +313,7 @@ impl<T> Slot<T> {
             }
 
             // lock the data, then update the index
-            let mut data = self.data.write().unwrap();
+            let mut data = self.data.write();
             if prev_index != 0
                 && self.reads.load(Ordering::Acquire) < readers.load(Ordering::Acquire)
             {
@@ -346,7 +344,7 @@ impl<T> Slot<T> {
 
     fn mark_read_in_range(&self, min: usize, max: usize, readers: usize) {
         // prevent the index from changing while maintenance is performed
-        let _read = self.data.read().unwrap();
+        let _read = self.data.read();
         let index = self.index.load(Ordering::Acquire);
         if index >= min && index < max {
             let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
@@ -367,7 +365,7 @@ impl<T> Slot<T> {
 
     fn decrement_read_in_range(&self, min: usize, max: usize) {
         // prevent the index from changing while maintenance is performed
-        let _read = self.data.read().unwrap();
+        let _read = self.data.read();
         let index = self.index.load(Ordering::Acquire);
         if index >= min && index < max {
             loop {
@@ -428,7 +426,7 @@ where
                 return TryRead::Pending;
             }
 
-            let data_lock = self.data.read().unwrap();
+            let data_lock = self.data.read();
 
             let reads = 1 + self.reads.fetch_add(1, Ordering::AcqRel);
             #[cfg(feature = "debug")]

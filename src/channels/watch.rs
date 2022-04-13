@@ -8,12 +8,10 @@ use super::SendSyncMessage;
 use std::{
     fmt,
     ops::{Deref, DerefMut},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        RwLock, RwLockReadGuard, RwLockWriteGuard,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use static_assertions::{assert_impl_all, assert_not_impl_all};
 
 use crate::{
@@ -77,7 +75,7 @@ impl<T> Sender<T> {
     /// After the borrow is released, receivers will be notified of a new value.
     pub fn borrow_mut<'s>(&'s mut self) -> RefMut<'s, T> {
         let extension = self.shared.extension();
-        let lock = extension.value.write().unwrap();
+        let lock = extension.value.write();
 
         RefMut {
             lock,
@@ -88,7 +86,7 @@ impl<T> Sender<T> {
     /// Immutably borrows the contained value, blocking the channel while the borrow is held.
     pub fn borrow<'s>(&'s mut self) -> Ref<'s, T> {
         let extension = self.shared.extension();
-        let lock = extension.value.read().unwrap();
+        let lock = extension.value.read();
 
         Ref { lock }
     }
@@ -202,7 +200,7 @@ where
             return TryRecv::Pending;
         }
 
-        let borrow = self.shared.extension().value.read().unwrap();
+        let borrow = self.shared.extension().value.read();
         let stored_generation = self.shared.extension().generation(Ordering::SeqCst);
         self.generation
             .store(stored_generation + 1, Ordering::Release);
@@ -274,7 +272,7 @@ impl<'t, T> Deref for Ref<'t, T> {
 impl<T> Receiver<T> {
     /// Borrows the value in the channel, blocking the channel while the value is held.
     pub fn borrow(&self) -> Ref<'_, T> {
-        let lock = self.shared.extension().value.read().unwrap();
+        let lock = self.shared.extension().value.read();
         Ref { lock }
     }
 }
@@ -293,7 +291,7 @@ impl<T> StateExtension<T> {
     }
 
     pub fn push(&self, value: T) {
-        let mut lock = self.value.write().unwrap();
+        let mut lock = self.value.write();
         *lock = value;
 
         self.generation.fetch_add(1, Ordering::SeqCst);
