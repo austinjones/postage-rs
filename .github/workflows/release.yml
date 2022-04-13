@@ -25,10 +25,10 @@ jobs:
           key: release
 
       - uses: actions-rs/cargo@v1
-        name: cargo test --all-features
+        name: cargo test
         with:
           command: test
-          args: --all-features
+          args: --all-features -- --test-threads=1 channels::broadcast::async_std_tests
 
       - uses: actions-rs/cargo@v1
         name: cargo test --no-default-features
