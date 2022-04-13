@@ -56,16 +56,16 @@ Benchmarks of postage channels, and comparable async-std/tokio channels.
 
 All benchmarks were taken with criterion and are in the `benches` directory.
 
-| Package   | Channel   | send/recv    | send full | recv empty |
-| --------- | --------- | ------------ | --------- | ---------- |
-| broadcast | postage   | 144ns        | 6ns       | 7ns        |
-| broadcast | tokio     | 88ns (-38%)  | 49ns      | 39ns       |
-| -         |           |              |           |            |
-| dispatch  | postage   | 87ns         | 26ns      | 26ns       |
-| dispatch  | async_std | 41ns (-52%)  | 10ns      | 10ns       |
-| -         |           |              |           |            |
-| mpsc      | postage   | 79ns         | 25ns      | 27ns       |
-| mpsc      | tokio     | 132ns (+67%) | 1ns       | 31ns       |
-| -         |           |              |           |            |
-| watch     | postage   | 96ns         | -         | 7ns        |
-| watch     | tokio     | 74ns (-22%)  | -         | 75ns       |
+| Package   | Channel   | send/recv   | send full | recv empty |
+| --------- | --------- | ----------- | --------- | ---------- |
+| broadcast | postage   | 114ns       | 7ns       | 8ns        |
+| broadcast | tokio     | 98ns (-14%) | 54ns      | 37ns       |
+| -         |           |             |           |            |
+| dispatch  | postage   | 80ns        | 26ns      | 25ns       |
+| dispatch  | async_std | 41ns (-48%) | 10ns      | 11ns       |
+| -         |           |             |           |            |
+| mpsc      | postage   | 83ns        | 27ns      | 30ns       |
+| mpsc      | tokio     | 85ns (+1%)  | 2ns       | 35ns       |
+| -         |           |             |           |            |
+| watch     | postage   | 96ns        | -         | 7ns        |
+| watch     | tokio     | 73ns (-23%) | -         | 75ns       |
