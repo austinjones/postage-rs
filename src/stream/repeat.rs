@@ -23,7 +23,7 @@ where
     type Item = T;
 
     fn poll_recv(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> PollRecv<Self::Item> {
-        return PollRecv::Ready(self.data.clone());
+        PollRecv::Ready(self.data.clone())
     }
 }
 

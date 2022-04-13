@@ -327,9 +327,11 @@ impl<T> Slot<T> {
                 );
                 continue;
             }
-            if let Err(_) =
-                self.index
-                    .compare_exchange(prev_index, index, Ordering::AcqRel, Ordering::Relaxed)
+
+            if self
+                .index
+                .compare_exchange(prev_index, index, Ordering::AcqRel, Ordering::Relaxed)
+                .is_err()
             {
                 continue;
             }
@@ -374,12 +376,11 @@ impl<T> Slot<T> {
                     return;
                 }
 
-                if let Ok(_) = self.reads.compare_exchange(
-                    reads,
-                    reads - 1,
-                    Ordering::Acquire,
-                    Ordering::Relaxed,
-                ) {
+                if self
+                    .reads
+                    .compare_exchange(reads, reads - 1, Ordering::Acquire, Ordering::Relaxed)
+                    .is_ok()
+                {
                     #[cfg(feature = "debug")]
                     log::debug!(
                         "[{}] Mark decrement in range occurred.  Decreased reads to {}",
@@ -404,6 +405,7 @@ impl<T> Slot<T>
 where
     T: Clone,
 {
+    #[allow(clippy::comparison_chain)]
     pub fn try_read(&self, index: usize, readers: &AtomicUsize, cx: &Context<'_>) -> TryRead<T> {
         loop {
             let slot_index = self.index.load(Ordering::Acquire);

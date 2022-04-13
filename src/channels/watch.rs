@@ -70,6 +70,7 @@ impl<T> Sink for Sender<T> {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<T> Sender<T> {
     /// Mutably borrows the contained value, blocking the channel while the borrow is held.
     ///

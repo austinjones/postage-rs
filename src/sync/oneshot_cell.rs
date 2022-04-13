@@ -53,10 +53,10 @@ impl<T> OneshotCell<T> {
             ) {
                 Ok(v) => Ok(v),
                 Err(e) => match e {
-                    State::None => return Err(TryRecvError::Pending),
-                    State::Writing => return Err(TryRecvError::Pending),
+                    State::None => Err(TryRecvError::Pending),
+                    State::Writing => Err(TryRecvError::Pending),
                     State::Ready => unreachable!(),
-                    State::Taken => return Err(TryRecvError::Closed),
+                    State::Taken => Err(TryRecvError::Closed),
                 },
             }
         }

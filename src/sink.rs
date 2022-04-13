@@ -286,7 +286,7 @@ where
     type Output = Result<(), SendError<S::Item>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if let None = self.value {
+        if self.value.is_none() {
             return Poll::Ready(Ok(()));
         }
 

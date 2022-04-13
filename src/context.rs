@@ -40,7 +40,7 @@ impl<'a> Context<'a> {
 
     /// Returns an optional reference to the `Waker` for the current task.
     pub fn waker(&self) -> Option<&'a Waker> {
-        self.waker.clone()
+        self.waker
     }
 }
 
