@@ -110,7 +110,7 @@ jobs:
         name: cargo test --all-features
         with:
           command: test
-          args: --all-features -- --test-threads=2
+          args: --features "blocking,futures-traits,logging"
 
       - uses: actions-rs/cargo@v1
         name: cargo test --no-default-features
@@ -122,7 +122,7 @@ jobs:
         name: cargo test --release --all-features
         with:
           command: test
-          args: --release --all-features
+          args: --release --features "blocking,futures-traits,logging"
 
       - uses: actions-rs/cargo@v1
         name: cargo test --release --no-default-features
