@@ -83,6 +83,13 @@ impl<T> Sender<T> {
         }
     }
 
+    pub fn subscribe(&mut self) -> Receiver<T> {
+        Receiver {
+            shared: self.shared.clone_receiver(),
+            generation: AtomicUsize::new(0),
+        }
+    }
+
     /// Immutably borrows the contained value, blocking the channel while the borrow is held.
     pub fn borrow<'s>(&'s mut self) -> Ref<'s, T> {
         let extension = self.shared.extension();
@@ -537,6 +544,47 @@ mod tests {
 
         assert_eq!(1, w1_count.get());
     }
+
+    #[async_std::test]
+    async fn subscribe_default() {
+        let mut cx = panic_context();
+        let (mut tx, _rx) = channel();
+        let mut rx2 = tx.subscribe();
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx2).poll_recv(&mut cx)
+        );
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx2).poll_recv(&mut noop_context())
+        );
+    }
+
+    #[async_std::test]
+    async fn subscribe_both_receive_value() {
+        let mut cx = panic_context();
+        let (mut tx, mut rx) = channel();
+        let mut rx2 = tx.subscribe();
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut noop_context())
+        );
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx2).poll_recv(&mut cx)
+        );
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx2).poll_recv(&mut noop_context())
+        );
+    }
 }
 
 #[cfg(test)]
@@ -631,6 +679,7 @@ mod tokio_tests {
 
 #[cfg(test)]
 mod async_std_tests {
+
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
