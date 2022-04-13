@@ -110,7 +110,7 @@ jobs:
         name: cargo test --all-features
         with:
           command: test
-          args: --all-features -- --test-threads=1 channels::broadcast::async_std_tests
+          args: --all-features -- --test-threads=1
 
       - uses: actions-rs/cargo@v1
         name: cargo test --no-default-features
