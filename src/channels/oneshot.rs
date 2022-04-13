@@ -130,12 +130,13 @@ impl<T> fmt::Debug for Receiver<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::{pin::Pin, task::Context};
+    use std::pin::Pin;
 
     use crate::{
         sink::{PollSend, Sink},
         stream::{PollRecv, Stream},
         test::{noop_context, panic_context},
+        Context,
     };
     use futures_test::task::new_count_waker;
 
@@ -187,6 +188,17 @@ mod tests {
     }
 
     #[test]
+    fn sender_disconnect_after_poll() {
+        let mut cx = noop_context();
+        let (tx, mut rx) = channel::<Message>();
+
+        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
+
+        drop(tx);
+        assert_eq!(PollRecv::Closed, Pin::new(&mut rx).poll_recv(&mut cx));
+    }
+
+    #[test]
     fn send_then_disconnect() {
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel();
@@ -225,11 +237,11 @@ mod tests {
         let (mut tx, mut rx) = channel();
 
         let (w1, w1_count) = new_count_waker();
-        let w1_context = Context::from_waker(&w1);
+        let mut w1_context = Context::from_waker(&w1);
 
         assert_eq!(
             PollRecv::Pending,
-            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
         );
 
         assert_eq!(0, w1_count.get());
@@ -248,10 +260,36 @@ mod tests {
 
         assert_eq!(1, w1_count.get());
     }
+
+    #[test]
+    fn sender_disconnect_wakes_receiver() {
+        let (tx, mut rx) = channel::<usize>();
+
+        let (w1, w1_count) = new_count_waker();
+        let mut w1_context = Context::from_waker(&w1);
+
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+
+        assert_eq!(0, w1_count.get());
+
+        drop(tx);
+
+        assert_eq!(1, w1_count.get());
+
+        assert_eq!(
+            PollRecv::Closed,
+            Pin::new(&mut rx).poll_recv(&mut w1_context)
+        );
+    }
 }
 
 #[cfg(test)]
 mod tokio_tests {
+    use std::time::Duration;
+
     use tokio::{task::spawn, time::timeout};
 
     use crate::{
@@ -276,10 +314,27 @@ mod tokio_tests {
             assert_eq!(Some(100usize), msg);
         }
     }
+
+    #[tokio::test]
+    async fn sender_disconnect() {
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, mut rx) = channel::<usize>();
+
+            spawn(async move { drop(tx) });
+
+            let msg = timeout(Duration::from_millis(100), async move { rx.recv().await })
+                .await
+                .expect("test timeout");
+
+            assert_eq!(None, msg);
+        }
+    }
 }
 
 #[cfg(test)]
 mod async_std_tests {
+    use std::time::Duration;
+
     use async_std::{future::timeout, task::spawn};
 
     use crate::{
@@ -302,6 +357,21 @@ mod async_std_tests {
                 .expect("test timeout");
 
             assert_eq!(Some(i), msg);
+        }
+    }
+
+    #[async_std::test]
+    async fn sender_disconnect() {
+        for _ in 0..CHANNEL_TEST_ITERATIONS {
+            let (tx, mut rx) = channel::<usize>();
+
+            spawn(async move { drop(tx) });
+
+            let msg = timeout(Duration::from_millis(100), async move { rx.recv().await })
+                .await
+                .expect("test timeout");
+
+            assert_eq!(None, msg);
         }
     }
 }
