@@ -1,3 +1,4 @@
+#[cfg(feature = "futures-traits")]
 use futures::{SinkExt, StreamExt};
 use postage::{mpsc, sink::SendError};
 
