@@ -120,22 +120,18 @@ mod impl_futures {
     use crate::sink::SendError;
 
     impl<T> futures::sink::Sink<T> for super::Sender<T> {
-        type Error = SendError<()>;
+        type Error = SendError<T>;
 
         fn poll_ready(
             self: std::pin::Pin<&mut Self>,
             _cx: &mut std::task::Context<'_>,
         ) -> Poll<Result<(), Self::Error>> {
-            if self.shared.is_closed() {
-                return Poll::Ready(Err(SendError(())));
-            }
-
             Poll::Ready(Ok(()))
         }
 
         fn start_send(self: std::pin::Pin<&mut Self>, item: T) -> Result<(), Self::Error> {
             if self.shared.is_closed() {
-                return Err(SendError(()));
+                return Err(SendError(item));
             }
 
             self.shared.extension().push(item);
