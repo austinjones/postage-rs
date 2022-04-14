@@ -11,7 +11,16 @@ repository = "https://github.com/austinjones/postage-rs"
 license = "MIT"
 readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["logging", "blocking"]
+# enables blocking send and receive
+blocking = ["pollster"]
+# enables debug log statements.  disabled by default in production builds as they are *very verbose*
+debug = ["log", "simple_logger"]
+# enables futures Sink and Stream implementations
+futures-traits = ["futures"]
+# enables combinators that log their messages
+logging = ["log"]
 
 [dependencies]
 atomic = "0.5"
@@ -62,23 +71,3 @@ harness = false
 [[bench]]
 name = "async_std_channel"
 harness = false
-
-
-[features]
-default = ["logging", "blocking"]
-# enables blocking send and receive
-blocking = ["pollster"]
-# enables debug log statements.  disabled by default in production builds as they are *very verbose*
-debug = ["log", "simple_logger"]
-# enables futures Sink and Stream implementations
-futures-traits = ["futures"]
-# enables combinators that log their messages
-logging = ["log"]
-
-
-
-# [[example]]
-# name = "tokio"
-
-# [[example]]
-# name = "async-std"

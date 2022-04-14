@@ -41,6 +41,13 @@ pub fn channel_with<T: Clone>(value: T) -> (Sender<T>, Receiver<T>) {
     (sender, receiver)
 }
 
+/// Constructs a pair of channel endpoints that store Option<T>
+///
+/// This is helpful if T does not implement Default, and you don't have an initial value.
+pub fn channel_with_option<T: Clone>() -> (Sender<Option<T>>, Receiver<Option<T>>) {
+    channel::<Option<T>>()
+}
+
 /// The sender half of a watch channel.  The stored value can be updated with the postage::Sink trait.
 pub struct Sender<T> {
     pub(in crate::channels::watch) shared: SenderShared<StateExtension<T>>,
@@ -83,6 +90,7 @@ impl<T> Sender<T> {
         }
     }
 
+    /// Creates a new Receiver that listens to this channel.
     pub fn subscribe(&mut self) -> Receiver<T> {
         Receiver {
             shared: self.shared.clone_receiver(),

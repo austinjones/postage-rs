@@ -152,6 +152,7 @@ mod impl_futures {
 }
 
 impl<T> Sender<T> {
+    /// Creates a new Receiver that listens to this channel.
     pub fn subscribe(&self) -> Receiver<T> {
         Receiver {
             shared: self.shared.clone_receiver(),
