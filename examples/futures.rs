@@ -1,5 +1,6 @@
 #[cfg(feature = "futures-traits")]
 use futures::{SinkExt, StreamExt};
+#[cfg(feature = "futures-traits")]
 use postage::{mpsc, sink::SendError};
 
 // ignore this.. build issue hack

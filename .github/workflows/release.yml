@@ -25,7 +25,7 @@ jobs:
           key: release
 
       - uses: actions-rs/cargo@v1
-        name: cargo test --all-features -- --test-threads=1
+        name: cargo test --all-features
         with:
           command: test
           args: --features "blocking,futures-traits,logging"
