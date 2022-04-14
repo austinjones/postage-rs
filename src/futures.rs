@@ -103,10 +103,10 @@ mod sink_tests {
 
             drop(rx);
             assert_eq!(
-                Poll::Ready(Err(SendError(()))),
+                Poll::Ready(Ok(())),
                 Pin::new(&mut tx).poll_ready(&mut std_cx)
             );
-            assert_eq!(Err(SendError(())), Pin::new(&mut tx).start_send($val));
+            assert_eq!(Err(SendError($val)), Pin::new(&mut tx).start_send($val));
         };
     }
 

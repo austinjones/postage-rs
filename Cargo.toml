@@ -38,6 +38,7 @@ parking_lot = "0.12"
 futures-test = "0.3"
 tokio = { version = "1.0", features = ["rt", "rt-multi-thread", "macros", "time", "sync"] }
 async-std = { version = "1.9", features = ["attributes"] }
+futures = { version = "0.3", default-features = false }
 criterion = "0.3"
 
 [[bench]]
@@ -71,3 +72,4 @@ harness = false
 [[bench]]
 name = "async_std_channel"
 harness = false
+
