@@ -56,6 +56,16 @@ pub struct Sender<T> {
 assert_impl_all!(Sender<SendSyncMessage>: Send, Sync, fmt::Debug);
 assert_not_impl_all!(Sender<SendSyncMessage>: Clone);
 
+impl<T> Default for Sender<T>
+where
+    T: Clone + Default,
+{
+    fn default() -> Self {
+        let (tx, _rx) = channel();
+        tx
+    }
+}
+
 impl<T> Sink for Sender<T> {
     type Item = T;
 
@@ -81,13 +91,7 @@ impl<T> Sender<T> {
     ///
     /// After the borrow is released, receivers will be notified of a new value.
     pub fn borrow_mut<'s>(&'s mut self) -> RefMut<'s, T> {
-        let extension = self.shared.extension();
-        let lock = extension.value.write();
-
-        RefMut {
-            lock,
-            shared: self.shared.clone(),
-        }
+        RefMut::new(self)
     }
 
     /// Creates a new Receiver that listens to this channel.
@@ -240,14 +244,32 @@ impl<T> fmt::Debug for Receiver<T> {
 }
 
 /// A mutable reference to the value contained in the channel.
-/// Receivers are notified when the borrow is released.
+///
+/// Receivers are notified when the borrow is released. But only
+/// if the reference has actually been dereferenced mutably at
+/// least once.
 pub struct RefMut<'t, T> {
     lock: RwLockWriteGuard<'t, T>,
     shared: SenderShared<StateExtension<T>>,
+    dirty: bool,
+}
+
+impl<'t, T> RefMut<'t, T> {
+    fn new(sender: &'t mut Sender<T>) -> Self {
+        let extension = sender.shared.extension();
+        let lock = extension.value.write();
+
+        RefMut {
+            lock,
+            shared: sender.shared.clone(),
+            dirty: false,
+        }
+    }
 }
 
 impl<'t, T> DerefMut for RefMut<'t, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
+        self.dirty = true;
         &mut *self.lock
     }
 }
@@ -262,8 +284,10 @@ impl<'t, T> Deref for RefMut<'t, T> {
 
 impl<'t, T> Drop for RefMut<'t, T> {
     fn drop(&mut self) {
-        self.shared.extension().increment();
-        self.shared.notify_receivers();
+        if self.dirty {
+            self.shared.extension().increment();
+            self.shared.notify_receivers();
+        }
     }
 }
 
@@ -407,7 +431,7 @@ mod tests {
     }
 
     #[test]
-    fn borrow_mut_notifies() {
+    fn borrow_mut_notifies_after_dereferenced_mutably() {
         let mut cx = noop_context();
         let (mut tx, mut rx) = channel();
 
@@ -431,6 +455,32 @@ mod tests {
             PollRecv::Ready(State(1)),
             Pin::new(&mut rx).poll_recv(&mut cx)
         );
+    }
+
+    #[test]
+    fn borrow_mut_does_not_notify_if_not_dereferenced_mutably() {
+        let mut cx = noop_context();
+        let (mut tx, mut rx) = channel();
+
+        assert_eq!(
+            PollRecv::Ready(State(0)),
+            Pin::new(&mut rx).poll_recv(&mut cx)
+        );
+
+        let (w1, w1_count) = new_count_waker();
+        let w1_context = Context::from_waker(&w1);
+        assert_eq!(
+            PollRecv::Pending,
+            Pin::new(&mut rx).poll_recv(&mut w1_context.into())
+        );
+
+        // Read the value while exclusively locked, but do not modify it.
+        assert_eq!(State(0), *tx.borrow_mut());
+
+        assert_eq!(0, w1_count.get());
+        assert_eq!(&State(0), &*rx.borrow());
+
+        assert_eq!(PollRecv::Pending, Pin::new(&mut rx).poll_recv(&mut cx));
     }
 
     #[test]
